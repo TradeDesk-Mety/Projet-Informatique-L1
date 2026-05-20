@@ -97,8 +97,17 @@ def calculate_beta(asset_prices: pd.Series, market_prices: pd.Series) -> float:
     if len(asset_prices) < 5 or len(market_prices) < 5:
         return 1.0
         
+    # Copie des séries et suppression des timezones pour éviter le bug d'alignement pandas
+    s_asset = asset_prices.copy()
+    if hasattr(s_asset.index, "tz") and s_asset.index.tz is not None:
+        s_asset.index = s_asset.index.tz_localize(None)
+        
+    s_market = market_prices.copy()
+    if hasattr(s_market.index, "tz") and s_market.index.tz is not None:
+        s_market.index = s_market.index.tz_localize(None)
+        
     # Alignement des données sur les mêmes dates
-    df = pd.DataFrame({"asset": asset_prices, "market": market_prices}).dropna()
+    df = pd.DataFrame({"asset": s_asset, "market": s_market}).dropna()
     if len(df) < 5:
         return 1.0
         
