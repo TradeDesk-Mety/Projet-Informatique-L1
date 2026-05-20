@@ -1,7 +1,7 @@
 #include <iostream>
 
 constexpr double ERROR_CODE = -1.0;
-constexpr double COMMISSION=0.03;
+constexpr double COMMISSION=0.01;
 
 extern "C"{
 

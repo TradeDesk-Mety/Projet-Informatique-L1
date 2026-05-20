@@ -1,21 +1,150 @@
-# Projet-Informatique-L1
+# 📈 Simulateur Place Boursière — Projet Informatique L1
 
+Simulateur de **paper trading quantitatif** avec analyse de marché en temps réel, backtesting de stratégies et pricing d'options.
 
+---
 
-## Data 
+## 🏗️ Architecture
 
-On a importé la bibliothèque yfinance pour avoir accès aux données boursières. on n'utilisera pas l'ensemble des actions du marché pour le moment : on a créé une bibliothèque (une liste prédéfinie) contenant une cinquantaine d'actions. Cette liste est évolutive et pourra être enrichie ultérieurement.
+### Pipeline Medallion SQL
+```
+yfinance API
+     │
+     ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Bronze DB  │ ──► │  Silver DB  │ ──► │   Gold DB   │
+│  (données   │     │ (nettoyage  │     │   (KPIs :   │
+│   brutes)   │     │  + SMA/RSI) │     │ Sharpe/Bêta)│
+└─────────────┘     └─────────────┘     └─────────────┘
+data/bronze/        data/silver/        data/gold/
+bronze.db           silver.db           gold.db
 
-on a aussi intègre plusieurs fonctions :
-* Récupérer le prix en direct d'une action.
-* Consulter l'historique des prix d'un actif.
-* Vérifier si un symbole boursier est bien présent dans notre bibliothèque prédéfinie.
+                    + Portfolio DB : data/portfolio/portfolio.db
+```
 
-### Utilisation de yfinance
+### Structure des fichiers
+```
+📁 Projet-Informatique-L1/
+├── 📁 .streamlit/          → Config thème sombre
+├── 📁 bot/                 → TradingBot (SMA / RSI)
+├── 📁 data/
+│   ├── data.py             → MARKET dict (1000 actifs) + cache SQL
+│   ├── database.py         → Connexions SQLite par couche
+│   ├── medallion.py        → Pipeline Bronze/Silver/Gold multi-threadé
+│   ├── 📁 bronze/          → bronze.db (données brutes yfinance)
+│   ├── 📁 silver/          → silver.db (SMA20, SMA50, RSI14, rendements)
+│   ├── 📁 gold/            → gold.db   (Sharpe, Bêta, volatilité ann.)
+│   └── 📁 portfolio/       → portfolio.db (paper trading)
+├── 📁 equities/            → Portfolio (achat/vente, PAMP)
+├── 📁 finance/             → Moteur C++ (commissions 1%, ROI)
+├── 📁 greeks/              → Black-Scholes, Greeks (Δ, Γ, ν, Θ, ρ)
+├── 📁 simulation/          → Backtesting SMA/RSI
+├── 📁 tests/               → 24 tests unitaires
+├── 📁 visualisation/       → Graphiques Plotly (7 types)
+├── 📁 website/
+│   ├── web.py              → Point d'entrée (login + session)
+│   └── 📁 pages/
+│       ├── 1_📊_Marché.py      → Temps réel + historique + corrélation
+│       ├── 2_💼_Portefeuille.py → Ordres + positions + CSV
+│       ├── 3_🔬_Backtesting.py → Stratégies historiques
+│       ├── 4_🤖_Bot.py         → Trading automatique
+│       └── 5_📐_Options_3D.py  → Black-Scholes 3D + Greeks
+├── populate_db.py          → Remplit les 4 BDD (1000 actifs, 20 threads)
+└── run_tests.py            → Suite de tests
+```
 
-Pour interagir avec l'API de Yahoo Finance, on utilisons la structure suivante :
+---
 
-* **Ticker** : C'est l'objet de base de `yfinance`. En lui passant le symbole d'une action (ex: "AAPL" pour Apple), il cible l'actif et se prépare à récupérer ses données financières.
-* **Période (`period`)** : Paramètre qui définit la plage de temps totale sur laquelle on souhaite récupérer les données. Par exemple : `"1d"` (1 jour), `"1mo"` (1 mois), `"1y"` (1 an), ou `"max"` (tout l'historique disponible).
-* **Intervalle (`interval`)** : Paramètre qui définit la fréquence (le pas de temps) entre chaque point de donnée. Par exemple : `"1m"` (1 minute), `"1h"` (1 heure), `"1d"` (1 jour).
-* **Historique (`history()`)** : C'est la méthode appelée sur l'objet Ticker pour télécharger concrètement les données en fonction de la `period` et de l'`interval` définis. Elle retourne un tableau de données (DataFrame Pandas) contenant les informations essentielles : prix d'ouverture (*Open*), de fermeture (*Close*), le plus haut (*High*), le plus bas (*Low*) et le volume des transactions (*Volume*).
+## 🚀 Démarrage rapide
+
+### 1. Installer les dépendances
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install streamlit yfinance pandas numpy scipy plotly pytickersymbols
+```
+
+### 2. Remplir la base de données (1ère utilisation)
+```bash
+./.venv/bin/python3 populate_db.py
+```
+> ⚠️ ~1000 actifs, prévoir 2–5 minutes. Utilise 20 threads en parallèle.
+
+### 3. Lancer le site
+```bash
+./.venv/bin/streamlit run website/web.py
+```
+
+### 4. Lancer les tests
+```bash
+./.venv/bin/python3 run_tests.py
+```
+
+---
+
+## 📊 Fonctionnalités
+
+### Page Marché (`1_📊_Marché.py`)
+| Onglet | Contenu |
+|--------|---------|
+| ⚡ **Temps Réel** | Cours intraday 1 min, VWAP, jauge RSI, métriques J |
+| 📈 **Historique** | Chandeliers + Bollinger Bands + SMA20/50 + Volume + RSI |
+| 📐 **Statistiques** | Volatilité ann., Sharpe, Bêta, Skewness, Kurtosis |
+| 📉 **Rendements** | Distribution + courbe normale théorique |
+| 🔗 **Corrélation** | Heatmap multi-actifs sur 1 an |
+
+### Page Portefeuille (`2_💼_Portefeuille.py`)
+- Passer des ordres Achat/Vente avec calcul de commission (moteur C++)
+- Tableau des positions coloré (vert/rouge selon PnL)
+- Pie chart de répartition du portefeuille
+- Export CSV de l'historique des transactions
+
+### Page Backtesting (`3_🔬_Backtesting.py`)
+- Stratégies : **SMA** (croisement de moyennes mobiles) et **RSI** (force relative)
+- Métriques : rendement, alpha vs Buy&Hold, drawdown maximum, commissions
+- Graphique de performance avec courbe de drawdown
+- Signaux Achat/Vente affichés sur le cours
+
+### Page Options 3D (`5_📐_Options_3D.py`)
+- Surface 3D Black-Scholes : prix = f(Strike K, Maturité T)
+- Volatility Smile : prix vs Strike pour σ ∈ {15%, 20%, 25%, 35%, 50%}
+- Sensibilité des Greeks (Δ, Γ, ν, Θ) en fonction du prix S
+
+---
+
+## 🔧 Architecture Medallion SQL
+
+| Couche | Base | Contenu | Connexion |
+|--------|------|---------|-----------|
+| **Bronze** | `bronze/bronze.db` | OHLCV brut yfinance | `get_bronze_connection()` |
+| **Silver** | `silver/silver.db` | + daily_return, SMA20, SMA50, RSI14 | `get_silver_connection()` |
+| **Gold** | `gold/gold.db` | Sharpe, Bêta, Volatilité, last_price | `get_gold_connection()` |
+| **Portfolio** | `portfolio/portfolio.db` | Cash, positions, transactions | `get_portfolio_connection()` |
+
+**Multi-threading** : `ThreadPoolExecutor` avec 20 workers pour traiter 1000 actifs en parallèle.
+
+---
+
+## 💹 Univers de marché (1000 actifs)
+
+| Région | Indices | Tickers |
+|--------|---------|---------|
+| 🇺🇸 USA | S&P 500, NASDAQ 100, DOW JONES | ~500 |
+| 🇪🇺 Europe | CAC 40, DAX, FTSE 100, AEX, IBEX 35, Swiss 20, OMX... | ~498 |
+| + | Indices, ETFs, Cryptos | 18 |
+
+---
+
+## 🧪 Tests (24 tests, 100% ✅)
+
+```
+Finance (C++)    : commission, ROI, total net       — 5 tests
+Greeks           : Black-Scholes, Greeks, Sharpe     — 5 tests
+Medallion SQL    : pipeline Bronze→Silver→Gold       — 1 test
+Portfolio        : achat/vente, PAMP, sauvegarde     — 8 tests
+Simulation       : SMA, RSI, backtest                — 5 tests
+```
+
+---
+
+*Projet réalisé dans le cadre du cours Informatique L1 — Université Paris Nanterre*
