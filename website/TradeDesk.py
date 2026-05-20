@@ -23,7 +23,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from equities.equities import Portfolio
 from website.components.ui_config import set_global_ui
 from website.components.assistant_sidebar import render_assistant
-from data.database import PORTFOLIO_DB_PATH, get_portfolio_connection
+from data.database import get_portfolio_connection
 from data.security import hash_password, verify_password
 
 # ─── Configuration de la page ────────────────────────────────────────────────
