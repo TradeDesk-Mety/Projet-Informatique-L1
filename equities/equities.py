@@ -1,3 +1,18 @@
+"""
+equities.py — Gestion du portefeuille de trading (Positions, transactions, PAMP)
+=============================================================================
+
+Ce module définit la classe `Portfolio` qui modélise le portefeuille de paper trading.
+
+Relations avec les autres modules :
+----------------------------------
+- finance.py (C++) : utilisé pour calculer le coût net d'achat, le montant net reçu à la vente,
+  les commissions de courtage (1%), et le ROI global.
+- database.py : fournit la connexion SQLite pour persister l'état du portefeuille.
+- web.py & pages : manipulent l'objet `Portfolio` stocké en session pour exécuter les ordres,
+  afficher les positions et sauvegarder l'état de l'utilisateur connecté.
+"""
+
 import json
 import os
 from datetime import datetime
@@ -7,12 +22,12 @@ class Portfolio:
     def __init__(self, initial_cash: float = 10000.0):
         self.cash = float(initial_cash)
         self.positions = {}  # Format: {ticker: {"quantity": int, "avg_price": float}}
-        self.transactions = []  # List of dicts describing trades
+        self.transactions = []  # Liste de dictionnaires décrivant les transactions effectuées
         self.initial_cash = float(initial_cash)
 
     def buy(self, ticker: str, quantity: int, price: float) -> str:
         """
-        Achète un actif.
+        Achète un actif (action, ETF ou option).
         Calcule le coût total net (brut + commission) avec le moteur C++.
         """
         if quantity <= 0:
@@ -58,7 +73,7 @@ class Portfolio:
 
     def sell(self, ticker: str, quantity: int, price: float) -> str:
         """
-        Vend un actif.
+        Vend un actif (action, ETF ou option).
         Calcule le montant net reçu (brut - commission) avec le moteur C++.
         """
         if quantity <= 0:
@@ -136,8 +151,8 @@ class Portfolio:
         self.positions = data.get("positions", {})
         self.transactions = data.get("transactions", [])
 
-    def save_to_db(self, db_path: str = None):
-        """Sauvegarde l'état du portefeuille dans la base de données SQL."""
+    def save_to_db(self, user_id: int = 1, db_path: str = None):
+        """Sauvegarde l'état du portefeuille pour un utilisateur spécifique dans SQL."""
         import sqlite3
         if db_path is None:
             from data.database import DB_PATH
@@ -148,23 +163,24 @@ class Portfolio:
             cursor = conn.cursor()
             
             # 1. Sauvegarde du solde cash
-            cursor.execute("DELETE FROM portfolio_state")
-            cursor.execute("INSERT INTO portfolio_state (id, cash, initial_cash) VALUES (1, ?, ?)", 
-                           (self.cash, self.initial_cash))
+            cursor.execute("DELETE FROM portfolio_state WHERE user_id = ?", (user_id,))
+            cursor.execute("INSERT INTO portfolio_state (user_id, cash, initial_cash) VALUES (?, ?, ?)", 
+                           (user_id, self.cash, self.initial_cash))
             
             # 2. Sauvegarde des positions
-            cursor.execute("DELETE FROM portfolio_positions")
+            cursor.execute("DELETE FROM portfolio_positions WHERE user_id = ?", (user_id,))
             for ticker, pos in self.positions.items():
-                cursor.execute("INSERT INTO portfolio_positions (asset, quantity, avg_price) VALUES (?, ?, ?)",
-                               (ticker, pos["quantity"], pos["avg_price"]))
+                cursor.execute("INSERT INTO portfolio_positions (user_id, asset, quantity, avg_price) VALUES (?, ?, ?, ?)",
+                               (user_id, ticker, pos["quantity"], pos["avg_price"]))
                                
             # 3. Sauvegarde de l'historique des transactions
-            cursor.execute("DELETE FROM portfolio_transactions")
+            cursor.execute("DELETE FROM portfolio_transactions WHERE user_id = ?", (user_id,))
             for trade in self.transactions:
                 cursor.execute("""
-                INSERT INTO portfolio_transactions (timestamp, type, asset, quantity, price, commission, total_net)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO portfolio_transactions (user_id, timestamp, type, asset, quantity, price, commission, total_net)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
+                    user_id,
                     trade["timestamp"],
                     trade["type"],
                     trade["ticker"],
@@ -177,8 +193,8 @@ class Portfolio:
         finally:
             conn.close()
 
-    def load_from_db(self, db_path: str = None):
-        """Charge l'état du portefeuille depuis la base de données SQL."""
+    def load_from_db(self, user_id: int = 1, db_path: str = None):
+        """Charge l'état du portefeuille d'un utilisateur spécifique depuis SQL."""
         import sqlite3
         if db_path is None:
             from data.database import DB_PATH
@@ -192,20 +208,20 @@ class Portfolio:
             cursor = conn.cursor()
             
             # 1. Chargement du cash
-            cursor.execute("SELECT cash, initial_cash FROM portfolio_state WHERE id = 1")
+            cursor.execute("SELECT cash, initial_cash FROM portfolio_state WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             if row:
                 self.cash = row[0]
                 self.initial_cash = row[1]
                 
             # 2. Chargement des positions
-            cursor.execute("SELECT asset, quantity, avg_price FROM portfolio_positions")
+            cursor.execute("SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = ?", (user_id,))
             self.positions = {}
             for row in cursor.fetchall():
                 self.positions[row[0]] = {"quantity": int(row[1]), "avg_price": float(row[2])}
                 
             # 3. Chargement des transactions
-            cursor.execute("SELECT timestamp, type, asset, quantity, price, commission, total_net FROM portfolio_transactions ORDER BY id ASC")
+            cursor.execute("SELECT timestamp, type, asset, quantity, price, commission, total_net FROM portfolio_transactions WHERE user_id = ? ORDER BY id ASC", (user_id,))
             self.transactions = []
             for row in cursor.fetchall():
                 self.transactions.append({
@@ -224,14 +240,14 @@ class Portfolio:
 
     def save_to_file(self, filepath: str):
         if filepath.endswith(".db"):
-            self.save_to_db(filepath)
+            self.save_to_db(1, filepath)
         else:
             with open(filepath, "w") as f:
                 json.dump(self.to_dict(), f, indent=4)
 
     def load_from_file(self, filepath: str):
         if filepath.endswith(".db"):
-            self.load_from_db(filepath)
+            self.load_from_db(1, filepath)
         elif os.path.exists(filepath):
             with open(filepath, "r") as f:
                 data = json.load(f)
