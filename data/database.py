@@ -19,14 +19,19 @@ import os
 import psycopg2
 import streamlit as st
 
-# Récupération de l'URL de connexion depuis les Secrets sécurisés de Streamlit
-DATABASE_URL = st.secrets.get("postgres", {}).get("DATABASE_URL", "")
-
 def get_connection():
-    """Retourne une connexion active à la base de données PostgreSQL Cloud."""
-    if not DATABASE_URL:
-        raise ValueError("❌ L'URL de connexion (DATABASE_URL) est introuvable dans les secrets Streamlit.")
-    return psycopg2.connect(DATABASE_URL, timeout=30)
+    """Retourne une connexion active à la base de données PostgreSQL Cloud via paramètres individuels."""
+    # Récupération des secrets individuels
+    pg_secrets = st.secrets.get("postgres", {})
+    
+    return psycopg2.connect(
+        user=pg_secrets.get("DB_USER", "postgres"),
+        password=pg_secrets.get("DB_PASSWORD", ""),
+        host=pg_secrets.get("DB_HOST", ""),
+        port=pg_secrets.get("DB_PORT", "5432"),
+        database=pg_secrets.get("DB_NAME", "postgres"),
+        connect_timeout=30
+    )
 
 def get_bronze_connection():
     """Retourne une connexion active pour la couche Bronze."""
