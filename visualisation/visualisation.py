@@ -1,13 +1,27 @@
 """
-visualisation.py — Bibliothèque de graphiques enrichis pour le Simulateur Boursier L1
+visualisation.py — Bibliothèque de graphiques interactifs (Plotly)
+================================================================
+
+Ce module regroupe l'ensemble des fonctions de tracé de graphiques pour l'application.
+Il utilise Plotly pour générer des figures interactives s'intégrant au thème sombre.
+
 Graphiques disponibles :
-  - Candlestick + SMA + RSI + Volume (graphique principal multi-panneaux)
-  - Heatmap de corrélation entre actifs
-  - Jauge de sentiment (RSI)
-  - Distribution des rendements (histogramme)
-  - Évolution portefeuille vs benchmark (backtesting)
-  - Surface 3D Black-Scholes (options)
-  - Scatter Risk/Return
+-----------------------
+1. plot_candlestick : graphique multi-panneaux (Chandeliers, volumes colorés, RSI, Bandes de Bollinger).
+2. plot_realtime : graphique en ligne intraday 1 min avec ligne VWAP et volumes.
+3. plot_correlation_heatmap : matrice de corrélation (avec nettoyage automatique des timezones).
+4. plot_returns_distribution : histogramme des rendements journaliers comparés à une loi normale.
+5. plot_risk_return : scatter plot mettant en relation le rendement annuel et la volatilité.
+6. plot_backtest_performance : courbe de performance de stratégie comparée à un Buy & Hold et drawdown.
+7. plot_3d_option_surface : surface 3D Black-Scholes (prix d'option en fonction du Strike et de la Maturité).
+8. plot_rsi_gauge : jauge animée pour le RSI actuel.
+9. plot_rolling_volatility [NEW] : graphique de la volatilité historique glissante.
+10. plot_volume_breakout [NEW] : graphique mettant en valeur les anomalies de volume.
+
+Relations avec les autres modules :
+----------------------------------
+- greeks.greeks : utilise le pricer Black-Scholes pour la surface 3D.
+- Marché.py & Portefeuille.py & Backtesting.py : appellent ces fonctions pour le rendu dans Streamlit.
 """
 
 import pandas as pd
@@ -15,18 +29,17 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
+import math
 from greeks.greeks import black_scholes_pricing
 
 
-# ─────────────────────────────────────────────
-#  GRAPHIQUE PRINCIPAL : Candlestick + indicateurs
-# ─────────────────────────────────────────────
+# ── 1. GRAPHIQUE PRINCIPAL : Candlestick + indicateurs ─────────────────────────
 def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = True) -> go.Figure:
     """
     Graphique principal multi-panneaux :
-      - Panneau 1 (70%) : Chandeliers + SMA20 + SMA50 + Bollinger Bands
-      - Panneau 2 (15%) : Volume coloré (vert/rouge)
-      - Panneau 3 (15%) : RSI(14) avec zones surachat/survente
+      - Panneau 1 (65%) : Chandeliers + SMA20 + SMA50 + Bollinger Bands
+      - Panneau 2 (18%) : Volume coloré (vert/rouge)
+      - Panneau 3 (17%) : RSI(14) avec zones surachat/survente
     """
     rows = 3 if show_volume else 1
     row_heights = [0.65, 0.18, 0.17] if show_volume else [1.0]
@@ -40,7 +53,7 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
         subplot_titles=subplot_titles,
     )
 
-    # — Chandeliers
+    # Chandeliers
     colors_up   = "#26A69A"
     colors_down = "#EF5350"
     fig.add_trace(go.Candlestick(
@@ -52,13 +65,13 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
         name="Prix",
     ), row=1, col=1)
 
-    # — SMA 20 & 50
+    # SMA 20 & 50
     sma20 = df["Close"].rolling(20).mean()
     sma50 = df["Close"].rolling(50).mean()
     fig.add_trace(go.Scatter(x=df.index, y=sma20, line=dict(color="#FFA726", width=1.5), name="SMA 20"), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=sma50, line=dict(color="#42A5F5", width=1.5), name="SMA 50"), row=1, col=1)
 
-    # — Bandes de Bollinger (SMA20 ± 2σ)
+    # Bandes de Bollinger (SMA20 ± 2σ)
     std20 = df["Close"].rolling(20).std()
     bb_up = sma20 + 2 * std20
     bb_dn = sma20 - 2 * std20
@@ -67,12 +80,11 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
                              fill="tonexty", fillcolor="rgba(200,200,200,0.07)", name="BB -2σ"), row=1, col=1)
 
     if show_volume and "Volume" in df.columns:
-        # — Volume coloré
         vol_colors = [colors_up if c >= o else colors_down
                       for c, o in zip(df["Close"], df["Open"])]
         fig.add_trace(go.Bar(x=df.index, y=df["Volume"], marker_color=vol_colors, name="Volume", opacity=0.7), row=2, col=1)
 
-        # — RSI(14)
+        # Calcul du RSI(14)
         delta = df["Close"].diff()
         gain  = delta.clip(lower=0).rolling(14).mean()
         loss  = (-delta.clip(upper=0)).rolling(14).mean()
@@ -100,14 +112,8 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
     return fig
 
 
-# ─────────────────────────────────────────────
-#  COURS EN TEMPS RÉEL (1 min intraday)
-# ─────────────────────────────────────────────
-def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float) -> go.Figure:
-    """
-    Graphique intraday en ligne pour l'affichage temps réel.
-    Affiche le cours de la journée + VWAP.
-    """
+def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float, y_scale_mode: str = "Auto") -> go.Figure:
+    """Graphique intraday en ligne pour l'affichage temps réel avec contrôle de l'échelle."""
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         row_heights=[0.75, 0.25], vertical_spacing=0.04,
                         subplot_titles=[f"{ticker_name} — Temps réel (1 min)", "Volume"])
@@ -123,33 +129,47 @@ def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float) -> g
         name="Cours",
     ), row=1, col=1)
 
-    # VWAP
     if "Volume" in df.columns and df["Volume"].sum() > 0:
         vwap = (close * df["Volume"]).cumsum() / df["Volume"].cumsum()
         fig.add_trace(go.Scatter(x=df.index, y=vwap, line=dict(color="#FFA726", width=1.5, dash="dot"), name="VWAP"), row=1, col=1)
-
         fig.add_trace(go.Bar(x=df.index, y=df["Volume"], marker_color=color, opacity=0.6, name="Volume"), row=2, col=1)
 
-    # Ligne de cours actuel
     fig.add_hline(y=current_price, line=dict(color=color, dash="dash", width=1), row=1, col=1)
+
+    # Configuration de l'échelle Y
+    yaxis_config = dict(gridcolor="#1F2937")
+    if y_scale_mode == "Zoom serré":
+        if not close.empty:
+            ymin, ymax = close.min(), close.max()
+            pad = (ymax - ymin) * 0.05 if ymax != ymin else 1.0
+            yaxis_config["range"] = [ymin - pad, ymax + pad]
+    elif y_scale_mode == "Logarithmique":
+        yaxis_config["type"] = "log"
 
     fig.update_layout(
         template="plotly_dark", paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
         hovermode="x unified", margin=dict(l=10, r=10, t=40, b=10), height=450,
         xaxis_rangeslider_visible=False,
     )
+    fig.update_yaxes(patch=yaxis_config, row=1, col=1)
+    fig.update_yaxes(gridcolor="#1F2937", row=2, col=1)
+    fig.update_xaxes(gridcolor="#1F2937")
     return fig
 
 
-# ─────────────────────────────────────────────
-#  HEATMAP DE CORRÉLATION
-# ─────────────────────────────────────────────
+# ── 3. HEATMAP DE CORRÉLATION (AVEC FIX TIMEZONE) ─────────────────────────────
 def plot_correlation_heatmap(prices_dict: dict) -> go.Figure:
-    """
-    Heatmap de corrélation entre les rendements journaliers de plusieurs actifs.
-    prices_dict : {nom_actif: pd.Series de prix de clôture}
-    """
-    returns_df = pd.DataFrame({k: v.pct_change() for k, v in prices_dict.items()}).dropna()
+    """ Heatmap de corrélation entre les rendements de plusieurs actifs. """
+    # Correction du bug "tz-naive with tz-aware" :
+    # On force la suppression des fuseaux horaires sur chaque série pour pouvoir les aligner.
+    series_clean = {}
+    for k, v in prices_dict.items():
+        s = v.copy()
+        if s.index.tz is not None:
+            s.index = s.index.tz_localize(None)
+        series_clean[k] = s
+
+    returns_df = pd.DataFrame({k: s.pct_change() for k, s in series_clean.items()}).dropna()
     corr = returns_df.corr()
 
     fig = go.Figure(go.Heatmap(
@@ -164,16 +184,14 @@ def plot_correlation_heatmap(prices_dict: dict) -> go.Figure:
         hovertemplate="Corrélation %{x} / %{y} : %{z:.2f}<extra></extra>",
     ))
     fig.update_layout(
-        title="Matrice de Corrélation des Rendements",
+        title="Matrice de Corrélation des Rendements (Nettoyée des Timezones)",
         template="plotly_dark", paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
         margin=dict(l=10, r=10, t=50, b=10), height=500,
     )
     return fig
 
 
-# ─────────────────────────────────────────────
-#  DISTRIBUTION DES RENDEMENTS
-# ─────────────────────────────────────────────
+# ── 4. DISTRIBUTION DES RENDEMENTS ───────────────────────────────────────────
 def plot_returns_distribution(close: pd.Series, ticker_name: str) -> go.Figure:
     """Histogramme des rendements journaliers + courbe normale théorique."""
     returns = close.pct_change().dropna() * 100
@@ -181,7 +199,6 @@ def plot_returns_distribution(close: pd.Series, ticker_name: str) -> go.Figure:
 
     x_range = np.linspace(returns.min(), returns.max(), 300)
     normal_pdf = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x_range - mean) / std) ** 2)
-    # Mise à l'échelle pour superposition
     bin_width = (returns.max() - returns.min()) / 40
     normal_pdf_scaled = normal_pdf * len(returns) * bin_width
 
@@ -209,14 +226,9 @@ def plot_returns_distribution(close: pd.Series, ticker_name: str) -> go.Figure:
     return fig
 
 
-# ─────────────────────────────────────────────
-#  SCATTER RISQUE / RENDEMENT
-# ─────────────────────────────────────────────
+# ── 5. SCATTER RISQUE / RENDEMENT ─────────────────────────────────────────────
 def plot_risk_return(data_dict: dict) -> go.Figure:
-    """
-    Nuage de points Rendement Annualisé vs Volatilité Annualisée.
-    data_dict : {nom: {"return": float, "volatility": float}}
-    """
+    """Nuage de points Rendement Annualisé vs Volatilité Annualisée."""
     names  = list(data_dict.keys())
     rets   = [data_dict[n]["return"]     for n in names]
     vols   = [data_dict[n]["volatility"] for n in names]
@@ -244,9 +256,7 @@ def plot_risk_return(data_dict: dict) -> go.Figure:
     return fig
 
 
-# ─────────────────────────────────────────────
-#  BACKTESTING : Évolution du portefeuille
-# ─────────────────────────────────────────────
+# ── 6. PERFORMANCE DE STRATÉGIE ( drawdown compris ) ───────────────────────
 def plot_backtest_performance(backtest_results: dict, strategy_name: str) -> go.Figure:
     """Graphique de comparaison stratégie vs Buy & Hold avec drawdown."""
     dates             = backtest_results["dates"]
@@ -269,7 +279,6 @@ def plot_backtest_performance(backtest_results: dict, strategy_name: str) -> go.
             line=dict(color="#FFA726", width=1.5, dash="dot"), name="Buy & Hold passif",
         ), row=1, col=1)
 
-    # Drawdown
     portfolio_series = pd.Series(strategy_history)
     rolling_max = portfolio_series.cummax()
     drawdown = ((portfolio_series - rolling_max) / rolling_max) * 100
@@ -286,9 +295,7 @@ def plot_backtest_performance(backtest_results: dict, strategy_name: str) -> go.
     return fig
 
 
-# ─────────────────────────────────────────────
-#  3D : Surface Black-Scholes
-# ─────────────────────────────────────────────
+# ── 7. SURFACE 3D BLACK-SCHOLES ───────────────────────────────────────────────
 def plot_3d_option_surface(S: float, r: float, sigma: float, option_type: str = "call") -> go.Figure:
     """Surface 3D : prix option = f(Strike K, Maturité T)."""
     strikes    = np.linspace(S * 0.7, S * 1.3, 35)
@@ -324,9 +331,7 @@ def plot_3d_option_surface(S: float, r: float, sigma: float, option_type: str = 
     return fig
 
 
-# ─────────────────────────────────────────────
-#  JAUGE RSI
-# ─────────────────────────────────────────────
+# ── 8. JAUGE RSI ──────────────────────────────────────────────────────────────
 def plot_rsi_gauge(rsi_value: float, ticker_name: str) -> go.Figure:
     """Jauge demi-cercle affichant la valeur RSI actuelle."""
     if rsi_value < 30:
@@ -359,5 +364,85 @@ def plot_rsi_gauge(rsi_value: float, ticker_name: str) -> go.Figure:
     fig.update_layout(
         paper_bgcolor="#0E1117", font=dict(color="white"),
         margin=dict(l=20, r=20, t=60, b=20), height=280,
+    )
+    return fig
+
+
+# ── 9. ROLL VOLATILITY CHART [NEW] ────────────────────────────────────────────
+def plot_rolling_volatility(close: pd.Series, ticker_name: str, window: int = 20) -> go.Figure:
+    """Trace la volatilité historique glissante annualisée sur une fenêtre donnée."""
+    returns = close.pct_change().dropna()
+    # Volatilité glissante sur la fenêtre, annualisée (racine de 252 jours)
+    rolling_vol = returns.rolling(window).std() * np.sqrt(252.0) * 100.0
+    rolling_vol = rolling_vol.dropna()
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=rolling_vol.index, y=rolling_vol.values,
+        line=dict(color="#FFA726", width=2),
+        fill="tozeroy", fillcolor="rgba(255,167,38,0.06)",
+        name="Volatilité"
+    ))
+    fig.update_layout(
+        title=f"Volatilité Historique Glissante ({window} jours) — {ticker_name}",
+        xaxis_title="Date", yaxis_title="Volatilité Annualisée (%)",
+        template="plotly_dark", paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
+        hovermode="x unified", margin=dict(l=10, r=10, t=50, b=10), height=380
+    )
+    return fig
+
+
+# ── 10. VOLUME BREAKOUT CHART [NEW] ───────────────────────────────────────────
+def plot_volume_breakout(df: pd.DataFrame, ticker_name: str, window: int = 20) -> go.Figure:
+    """Trace les volumes journaliers et met en valeur les pics (> 2 * SMA de volume)."""
+    if "Volume" not in df.columns or df.empty:
+        return go.Figure()
+
+    volumes = df["Volume"]
+    sma_vol = volumes.rolling(window).mean()
+    threshold = sma_vol * 2.0
+    
+    # Couleur des volumes : rouge si baissier, vert si haussier.
+    # Mais si anomalie de volume (breakout), on utilise une couleur plus vive (ex: jaune/or)
+    colors = []
+    for i in range(len(df)):
+        close_p = df["Close"].iloc[i]
+        open_p = df["Open"].iloc[i]
+        vol_val = volumes.iloc[i]
+        limit = threshold.iloc[i]
+        
+        # Détection anomalie
+        if not pd.isna(limit) and vol_val > limit:
+            colors.append("#FCD34D") # Or / Jaune vif pour anomalie
+        elif close_p >= open_p:
+            colors.append("rgba(38,166,154,0.6)") # Vert atténué
+        else:
+            colors.append("rgba(239,83,80,0.6)") # Rouge atténué
+
+    fig = go.Figure()
+    # Volumes
+    fig.add_trace(go.Bar(
+        x=df.index, y=volumes,
+        marker_color=colors,
+        name="Volume"
+    ))
+    # SMA de Volume
+    fig.add_trace(go.Scatter(
+        x=sma_vol.index, y=sma_vol.values,
+        line=dict(color="#60A5FA", width=1.5, dash="dash"),
+        name=f"Moyenne Mobile Volume ({window}j)"
+    ))
+    # Seuil d'anomalie (2 * SMA)
+    fig.add_trace(go.Scatter(
+        x=threshold.index, y=threshold.values,
+        line=dict(color="#F59E0B", width=1.5, dash="dot"),
+        name="Seuil Anomalie (2x MM)"
+    ))
+
+    fig.update_layout(
+        title=f"Analyse des Volumes & Breakouts (Jaune = Anomalie) — {ticker_name}",
+        xaxis_title="Date", yaxis_title="Volume de titres échangés",
+        template="plotly_dark", paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
+        hovermode="x unified", margin=dict(l=10, r=10, t=50, b=10), height=380
     )
     return fig
