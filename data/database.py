@@ -29,18 +29,22 @@ DB_PATH = PORTFOLIO_DB_PATH  # alias pour rétrocompatibilité
 
 def get_bronze_connection():
     """Retourne une connexion active à la base de données Bronze (données brutes)."""
+    os.makedirs(os.path.dirname(BRONZE_DB_PATH), exist_ok=True)
     return sqlite3.connect(BRONZE_DB_PATH, timeout=30.0)
 
 def get_silver_connection():
     """Retourne une connexion active à la base de données Silver (données nettoyées)."""
+    os.makedirs(os.path.dirname(SILVER_DB_PATH), exist_ok=True)
     return sqlite3.connect(SILVER_DB_PATH, timeout=30.0)
 
 def get_gold_connection():
     """Retourne une connexion active à la base de données Gold (KPIs calculés)."""
+    os.makedirs(os.path.dirname(GOLD_DB_PATH), exist_ok=True)
     return sqlite3.connect(GOLD_DB_PATH, timeout=30.0)
 
 def get_portfolio_connection():
     """Retourne une connexion active à la base de données de portefeuille."""
+    os.makedirs(os.path.dirname(PORTFOLIO_DB_PATH), exist_ok=True)
     return sqlite3.connect(PORTFOLIO_DB_PATH, timeout=30.0)
 
 def get_connection():
