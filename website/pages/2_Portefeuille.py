@@ -1,3 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from website.components.assistant_sidebar import render_assistant
+from website.components.ui_config import set_global_ui
+set_global_ui()
+render_assistant()
 """
 2_💼_Portefeuille.py — Ordres de trading, positions, historique (Actions, ETFs et Options)
 ========================================================================================
@@ -33,7 +40,8 @@ def save():
     p.save_to_db(user_id, PORTFOLIO_DB_PATH)
 
 
-st.title("💼 Portefeuille — Paper Trading")
+st.title("Portefeuille & Ordres")
+st.caption("Centralisez vos liquidités, surveillez vos positions et passez des ordres sur le marché.")
 
 # ─── Collecte des sous-jacents détenus ───────────────────────────────────────
 held_underlyings = set()
@@ -103,16 +111,20 @@ def get_current_portfolio_value_and_prices():
     return val, current_prices
 
 
-val, real_prices = get_current_portfolio_value_and_prices()
+total_value, real_prices = get_current_portfolio_value_and_prices()
 perf = p.get_total_performance(real_prices)
-delta = val - p.initial_cash
+valeur_actions = total_value - p.cash
 
 # ─── Métriques principales ────────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("💵 Liquidités", f"{p.cash:,.2f} €")
-c2.metric("📦 Valeur totale", f"{val:,.2f} €", f"{delta:+,.2f} €")
-c3.metric("📈 Performance", f"{perf:.2f} %", f"{perf:+.2f} %")
-c4.metric("💼 Capital initial", f"{p.initial_cash:,.2f} €")
+c1.metric("Valeur Totale", f"{total_value:,.2f} €")
+c2.metric("Liquidités (Cash)", f"{p.cash:,.2f} €")
+c3.metric("Valeur des Actions", f"{valeur_actions:,.2f} €", help="Valeur de l'ensemble de vos positions boursières.")
+c4.metric(
+    "Performance (ROI)",
+    f"{perf:+.2f} %",
+    delta=f"{total_value - p.initial_cash:+.2f} €",
+)
 
 st.divider()
 
@@ -141,20 +153,11 @@ with tab_order:
         # ── Sélection de l'actif (différente selon Achat / Vente) ─────────────
         if is_buy:
             # Achat : toute la liste du marché
-            try:
-                default_idx = list(data_mod.MARKET.keys()).index(selected_trade_asset)
-            except ValueError:
-                default_idx = 0
-
             trade_asset = st.selectbox(
                 "Actif sous-jacent",
                 list(data_mod.MARKET.keys()),
-                index=default_idx,
-                key="buy_asset_select",
+                key="selected_trade_asset",
             )
-            if trade_asset != selected_trade_asset:
-                st.session_state.selected_trade_asset = trade_asset
-                st.rerun()
 
         else:
             # Vente : uniquement les positions existantes
@@ -178,7 +181,7 @@ with tab_order:
             trade_asset_raw = st.selectbox(
                 "Actif à vendre",
                 sell_choices,
-                key="sell_asset_select",
+                key="selected_sell_asset",
             )
             # Pour les options, le sous-jacent est la première partie du ticker
             trade_asset = (

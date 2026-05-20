@@ -14,6 +14,7 @@ Relations avec les autres modules :
 """
 
 import hashlib
+import hmac
 import os
 
 def hash_password(password: str) -> str:
@@ -38,6 +39,7 @@ def verify_password(stored_hash: str, provided_password: str) -> bool:
         key = bytes.fromhex(key_hex)
         
         new_key = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
-        return key == new_key
+        # compare_digest évite les timing attacks (temps constant quelle que soit la différence)
+        return hmac.compare_digest(key, new_key)
     except Exception:
         return False

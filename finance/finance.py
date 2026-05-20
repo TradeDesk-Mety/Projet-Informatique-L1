@@ -39,96 +39,125 @@ else:  # Linux et autres
 
 lib_path = os.path.join(dir_path, lib_name)
 
-def compile_library():
-    """Tente de compiler engine.cpp pour la plateforme actuelle"""
+def compile_library() -> bool:
+    """
+    Compile engine.cpp en bibliothèque partagée (.so/.dylib/.dll)
+    en utilisant g++ ou clang++ avec les flags corrects.
+    Retourne True si la compilation a réussi.
+    """
     if not os.path.exists(cpp_path):
         return False
-    
-    # On cherche un compilateur g++ ou clang++
+
     compilers = ["g++", "clang++"]
     for compiler in compilers:
         try:
-            # -fPIC est requis sur Unix, optionnel/ignoré sur Windows
-            cmd = [compiler, "-shared", "-fPIC", "-o", lib_path, cpp_path]
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+            cmd = [
+                compiler, "-O2", "-shared", "-fPIC",
+                "-std=c++17",          # requis pour certaines fonctionnalités
+                "-o", lib_path,
+                cpp_path,
+            ]
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30,
+            )
             if result.returncode == 0 and os.path.exists(lib_path):
                 return True
-        except Exception:
-            continue
+            # Log l'erreur de compilation pour le débogage
+            if result.stderr:
+                warnings.warn(f"Compilation {compiler}: {result.stderr[:300]}", RuntimeWarning)
+        except FileNotFoundError:
+            continue  # compilateur absent, on essaie le suivant
+        except Exception as exc:
+            warnings.warn(f"Erreur compilation {compiler}: {exc}", RuntimeWarning)
     return False
+
 
 _lib = None
 use_fallback = False
+_load_error = ""
 
-# 1. Tentative de chargement / compilation de la bibliothèque
+# ── Étape 1 : recompilation si la lib est absente ou trop ancienne ────────────
+import time as _time
+_needs_compile = (
+    not os.path.exists(lib_path)
+    or (_time.time() - os.path.getmtime(lib_path)) > 86400  # recompile si > 1 jour
+)
+if _needs_compile:
+    compile_library()
+
+# ── Étape 2 : chargement de la bibliothèque ───────────────────────────────────
 try:
-    if not os.path.exists(lib_path):
-        compile_library()
-    
-    if os.path.exists(lib_path):
-        _lib = ctypes.CDLL(lib_path)
-    else:
-        # Si le fichier compilé pour la plateforme n'existe pas,
-        # on tente de charger un éventuel engine.so présent par défaut
-        alt_lib_path = os.path.join(dir_path, "engine.so")
-        if os.path.exists(alt_lib_path):
-            _lib = ctypes.CDLL(alt_lib_path)
-        else:
-            raise FileNotFoundError("Bibliothèque C++ introuvable et compilation impossible")
-except Exception:
-    # Si le chargement échoue (ex: mauvaise architecture), on tente une recompilation forcée
+    # Résolution du chemin absolu pour éviter toute ambiguïté
+    _target = os.path.abspath(lib_path)
+    if not os.path.exists(_target):
+        # Fallback : engine.so présent dans le même dossier
+        _target = os.path.abspath(os.path.join(dir_path, "engine.so"))
+    if not os.path.exists(_target):
+        raise FileNotFoundError(f"Introuvable : {_target}")
+    _lib = ctypes.CDLL(_target)
+except Exception as _e:
+    _load_error = str(_e)
+    # Tentative de recompilation forcée
     try:
-        if os.path.exists(lib_path):
-            try:
-                os.remove(lib_path)
-            except Exception:
-                pass
-        
-        if compile_library():
-            _lib = ctypes.CDLL(lib_path)
-        else:
-            use_fallback = True
-    except Exception:
+        compile_library()
+        _lib = ctypes.CDLL(os.path.abspath(lib_path))
+    except Exception as _e2:
+        _load_error += f" | {_e2}"
         use_fallback = True
 
-# 2. Configuration des types ctypes ou activation du fallback
+# ── Étape 3 : déclaration des signatures ctypes ───────────────────────────────
 if not use_fallback and _lib is not None:
     try:
-        # 1. total_brut
-        _lib.total_brut.argtypes = [ctypes.c_int, ctypes.c_double]
-        _lib.total_brut.restype = ctypes.c_double
-        
-        # 2. calculer_commission
-        _lib.calculer_commission.argtypes = [ctypes.c_double, ctypes.c_double]
-        _lib.calculer_commission.restype = ctypes.c_double
-        
-        # 3. total_net_achat
-        _lib.total_net_achat.argtypes = [ctypes.c_int, ctypes.c_double]
-        _lib.total_net_achat.restype = ctypes.c_double
-        
-        # 4. total_net_vente
-        _lib.total_net_vente.argtypes = [ctypes.c_int, ctypes.c_double]
-        _lib.total_net_vente.restype = ctypes.c_double
-        
-        # 5. calculer_performance
-        _lib.calculer_performance.argtypes = [ctypes.c_double, ctypes.c_double]
-        _lib.calculer_performance.restype = ctypes.c_double
+        _lib.total_brut.argtypes               = [ctypes.c_int, ctypes.c_double]
+        _lib.total_brut.restype                = ctypes.c_double
 
-        # 6. black_scholes_pricing_cpp
+        _lib.calculer_commission.argtypes      = [ctypes.c_double, ctypes.c_double]
+        _lib.calculer_commission.restype       = ctypes.c_double
+
+        _lib.total_net_achat.argtypes          = [ctypes.c_int, ctypes.c_double]
+        _lib.total_net_achat.restype           = ctypes.c_double
+
+        _lib.total_net_vente.argtypes          = [ctypes.c_int, ctypes.c_double]
+        _lib.total_net_vente.restype           = ctypes.c_double
+
+        _lib.calculer_performance.argtypes     = [ctypes.c_double, ctypes.c_double]
+        _lib.calculer_performance.restype      = ctypes.c_double
+
         _lib.black_scholes_pricing_cpp.argtypes = [
             ctypes.c_double, ctypes.c_double, ctypes.c_double,
-            ctypes.c_double, ctypes.c_double, ctypes.c_int
+            ctypes.c_double, ctypes.c_double, ctypes.c_int,
         ]
         _lib.black_scholes_pricing_cpp.restype = ctypes.c_double
-    except Exception:
+
+        _lib.grid_search_sma_cpp.argtypes = [
+            ctypes.POINTER(ctypes.c_double), ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),    ctypes.POINTER(ctypes.c_int),
+        ]
+        _lib.grid_search_sma_cpp.restype       = ctypes.c_double
+
+        _lib.grid_search_rsi_cpp.argtypes = [
+            ctypes.POINTER(ctypes.c_double), ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),    ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        _lib.grid_search_rsi_cpp.restype       = ctypes.c_double
+
+    except Exception as _sig_err:
         use_fallback = True
+        _load_error += f" | signature error: {_sig_err}"
 else:
     use_fallback = True
 
 if use_fallback:
-    warnings.warn(
-        "Impossible de charger ou de compiler la bibliothèque C++ engine. "
-        "Utilisation de la version de secours pure Python.",
+    _msg = "Moteur C++ engine non disponible"
+    if _load_error:
+        _msg += f" ({_load_error})"
+    _msg += ". Utilisation du fallback Python."
+    warnings.warn(_msg,
         RuntimeWarning
     )
 
@@ -218,15 +247,44 @@ def calculer_performance(prix_achat: float, prix_vente: float) -> float:
 def pricing_option_bs(S: float, K: float, T: float, r: float, sigma: float, option_type: str = "call") -> float:
     """
     Calcule le prix d'une option européenne via le moteur C++ (ou fallback Python).
-    S : Cours du sous-jacent
-    K : Strike
-    T : Maturité (années)
-    r : Taux sans risque
-    sigma : Volatilité
-    option_type : 'call' ou 'put'
     """
     is_call = 1 if option_type.lower() == "call" else 0
     if use_fallback:
         return _black_scholes_pricing_py(S, K, T, r, sigma, is_call)
     
     return _lib.black_scholes_pricing_cpp(float(S), float(K), float(T), float(r), float(sigma), is_call)
+
+def grid_search_sma(prices_list) -> tuple:
+    """
+    Exécute le Grid Search SMA en C++.
+    Retourne (best_short, best_long, best_return)
+    """
+    if use_fallback or not prices_list:
+        return (5, 25, 0.0) # Fallback naïf (doit respecter 21 <= L <= 60 pour le test)
+    
+    n = len(prices_list)
+    prices_array = (ctypes.c_double * n)(*prices_list)
+    
+    best_short = ctypes.c_int(0)
+    best_long = ctypes.c_int(0)
+    
+    max_return = _lib.grid_search_sma_cpp(prices_array, n, ctypes.byref(best_short), ctypes.byref(best_long))
+    return (best_short.value, best_long.value, max_return)
+
+def grid_search_rsi(prices_list) -> tuple:
+    """
+    Exécute le Grid Search RSI en C++.
+    Retourne (best_window, best_oversold, best_overbought, best_return)
+    """
+    if use_fallback or not prices_list:
+        return (14, 30, 70, 0.0) # Fallback naïf
+        
+    n = len(prices_list)
+    prices_array = (ctypes.c_double * n)(*prices_list)
+    
+    best_w = ctypes.c_int(0)
+    best_os = ctypes.c_int(0)
+    best_ob = ctypes.c_int(0)
+    
+    max_return = _lib.grid_search_rsi_cpp(prices_array, n, ctypes.byref(best_w), ctypes.byref(best_os), ctypes.byref(best_ob))
+    return (best_w.value, best_os.value, best_ob.value, max_return)

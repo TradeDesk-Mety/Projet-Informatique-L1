@@ -1,3 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from website.components.assistant_sidebar import render_assistant
+from website.components.ui_config import set_global_ui
+set_global_ui()
+render_assistant()
 """
 1_📊_Marché.py — Page Marché : cours en direct + analyse technique et quantitative
 ==============================================================================
@@ -39,11 +46,11 @@ st.title("📊 Marché — Cours & Analyse Technique")
 asset_names  = list(data_mod.MARKET.keys())
 col_sel, col_per, col_int = st.columns([3, 1.5, 1.5])
 with col_sel:
-    selected = st.selectbox("Actif à analyser", asset_names)
+    selected = st.selectbox("Actif à analyser", asset_names, help="Sélectionnez l'actif boursier que vous souhaitez étudier. Vous pouvez taper le nom pour le rechercher.")
 with col_per:
-    period   = st.selectbox("Période", ["1d","5d","1mo","3mo","6mo","1y","2y","5y"], index=2)
+    period   = st.selectbox("Période", ["1d","5d","1mo","3mo","6mo","1y","2y","5y"], index=2, help="L'étendue temporelle totale de l'historique récupéré.")
 with col_int:
-    interval = st.selectbox("Intervalle", ["1m","5m","15m","1h","1d","1wk"], index=4)
+    interval = st.selectbox("Intervalle", ["1m","5m","15m","1h","1d","1wk"], index=4, help="La durée que représente chaque bougie sur le graphique.")
 
 st.divider()
 
@@ -119,6 +126,7 @@ with tab_rt:
 # ─────────────────────── TAB 2 : HISTORIQUE ──────────────────────────────────
 with tab_hist:
     st.subheader(f"📈 Historique — {selected} ({period} / {interval})")
+    st.info("💡 Astuce : Le graphique est 100% interactif. Utilisez la molette pour zoomer, tracez un rectangle pour cibler une zone, ou double-cliquez pour réinitialiser l'échelle.")
     try:
         df_hist = data_mod.recuperer_historique(selected, period, interval)
         st.plotly_chart(vis.plot_candlestick(df_hist, selected), use_container_width=True)
@@ -156,19 +164,19 @@ with tab_stats:
 
         rets   = close.pct_change().dropna()
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Volatilité ann.",    f"{vol*100:.2f} %")
-        c2.metric("Ratio de Sharpe",    f"{sharpe:.2f}")
-        c3.metric("Bêta (vs S&P 500)",  f"{beta:.2f}")
-        c4.metric("Rendement 1 an",     f"{((close.iloc[-1]/close.iloc[0])-1)*100:.2f} %")
+        c1.metric("Volatilité ann.",    f"{vol*100:.2f} %", help="Risque statistique : amplitude de la variation des rendements sur l'année.")
+        c2.metric("Ratio de Sharpe",    f"{sharpe:.2f}", help="Plus il est élevé (>1.0), plus la rentabilité est bonne par rapport au risque pris.")
+        c3.metric("Bêta (vs S&P 500)",  f"{beta:.2f}", help="Si Bêta > 1, l'actif est plus réactif et risqué que le marché. Si < 1, il est plus défensif.")
+        c4.metric("Rendement 1 an",     f"{((close.iloc[-1]/close.iloc[0])-1)*100:.2f} %", help="Croissance brute de l'actif depuis la première donnée de l'année glissante.")
 
         c5, c6, c7, c8 = st.columns(4)
-        c5.metric("Max",      f"{close.max():.2f}")
-        c6.metric("Min",      f"{close.min():.2f}")
-        c7.metric("Skewness", f"{rets.skew():.2f}")
-        c8.metric("Kurtosis", f"{rets.kurtosis():.2f}")
+        c5.metric("Max 1 An",      f"{close.max():.2f}")
+        c6.metric("Min 1 An",      f"{close.min():.2f}")
+        c7.metric("Skewness", f"{rets.skew():.2f}", help="Asymétrie des rendements. Négatif indique un risque de krach soudain (queue épaisse à gauche).")
+        c8.metric("Kurtosis", f"{rets.kurtosis():.2f}", help="Mesure des extrêmes. S'il est > 3, l'actif connaît régulièrement des variations extrêmes hors de la norme.")
 
-        # Tableau des données historiques récentes
-        st.dataframe(df_s.tail(30).style.format("{:.2f}"), use_container_width=True)
+        # Tableau des données historiques récentes corrigé pour la robustesse d'affichage
+        st.dataframe(df_s.tail(30), use_container_width=True)
     except Exception as e:
         st.error(f"Erreur : {e}")
 

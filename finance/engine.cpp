@@ -97,4 +97,158 @@ extern "C" {
             return K * std::exp(-r * T) * normal_cdf(-d2) - S * normal_cdf(-d1);
         }
     }
+    /* Calcul SMA rapide en C++ */
+    void calculate_sma_cpp(const double* prices, int n, int window, double* out_sma) {
+        for (int i = 0; i < n; i++) {
+            if (i < window - 1) {
+                out_sma[i] = 0.0;
+            } else {
+                double sum = 0.0;
+                for (int j = 0; j < window; j++) {
+                    sum += prices[i - j];
+                }
+                out_sma[i] = sum / window;
+            }
+        }
+    }
+
+    /* 
+       Optimisation Grid Search pour les hyperparamètres (SMA) en C++ 
+       Cette fonction génère l'Equity Curve pour des centaines de combinaisons
+       et retourne le meilleur rendement absolu tout en renseignant best_short et best_long.
+    */
+    double grid_search_sma_cpp(const double* prices, int n, int* best_short, int* best_long) {
+        double max_return = -999999.0;
+        int opt_short = 5;
+        int opt_long = 15;
+
+        double* sma_s = new double[n];
+        double* sma_l = new double[n];
+
+        // Grid search: tester SMA courte [5 à 20] et SMA longue [21 à 60]
+        for (int sw = 5; sw <= 20; sw++) {
+            calculate_sma_cpp(prices, n, sw, sma_s);
+            for (int lw = 21; lw <= 60; lw++) {
+                calculate_sma_cpp(prices, n, lw, sma_l);
+
+                // Simulation de l'Equity Curve
+                double initial_cash = 10000.0;
+                double cash = initial_cash;
+                double position = 0.0;
+                double commission_rate = 0.01; // 1%
+
+                for (int i = lw; i < n; i++) {
+                    if (sma_s[i] > sma_l[i] && position == 0.0) {
+                        // Signal d'Achat
+                        double brut_val = cash / (1.0 + commission_rate);
+                        position = brut_val / prices[i];
+                        cash = 0.0;
+                    } else if (sma_s[i] < sma_l[i] && position > 0.0) {
+                        // Signal de Vente
+                        double brut_val = position * prices[i];
+                        double commission = brut_val * commission_rate;
+                        cash = brut_val - commission;
+                        position = 0.0;
+                    }
+                }
+                
+                // Valeur finale du portefeuille
+                double final_value = cash + (position * prices[n-1]);
+                double ret = ((final_value - initial_cash) / initial_cash) * 100.0;
+
+                if (ret > max_return) {
+                    max_return = ret;
+                    opt_short = sw;
+                    opt_long = lw;
+                }
+            }
+        }
+
+        delete[] sma_s;
+        delete[] sma_l;
+
+        if (best_short) *best_short = opt_short;
+        if (best_long) *best_long = opt_long;
+
+        return max_return;
+    }
+
+    /* Calcul du RSI rapide en C++ (méthode de moyenne mobile simple pour coller au Python) */
+    void calculate_rsi_cpp(const double* prices, int n, int window, double* out_rsi) {
+        if (n <= window) {
+            for (int i = 0; i < n; i++) out_rsi[i] = 50.0;
+            return;
+        }
+        for (int i = 0; i < window; i++) out_rsi[i] = 50.0;
+        
+        for (int i = window; i < n; i++) {
+            double gain = 0.0, loss = 0.0;
+            for (int j = 0; j < window; j++) {
+                double diff = prices[i - j] - prices[i - j - 1];
+                if (diff > 0) gain += diff;
+                else loss -= diff;
+            }
+            gain /= window;
+            loss /= window;
+            
+            if (loss == 0.0) out_rsi[i] = 100.0;
+            else {
+                double rs = gain / loss;
+                out_rsi[i] = 100.0 - (100.0 / (1.0 + rs));
+            }
+        }
+    }
+
+    /* Grid Search Optimisation pour l'hyperparamètre RSI en C++ */
+    double grid_search_rsi_cpp(const double* prices, int n, int* best_window, int* best_oversold, int* best_overbought) {
+        double max_return = -999999.0;
+        int opt_w = 14;
+        int opt_os = 30;
+        int opt_ob = 70;
+        
+        double* rsi = new double[n];
+        
+        // Tester fenêtre [5 à 21], Survente [20 à 40], Surachat [60 à 80]
+        for (int w = 5; w <= 21; w++) {
+            calculate_rsi_cpp(prices, n, w, rsi);
+            
+            for (int os = 20; os <= 40; os += 5) {
+                for (int ob = 60; ob <= 80; ob += 5) {
+                    double initial_cash = 10000.0;
+                    double cash = initial_cash;
+                    double position = 0.0;
+                    double commission_rate = 0.01;
+                    
+                    for (int i = w; i < n; i++) {
+                        if (rsi[i] < os && position == 0.0) {
+                            // Achat
+                            double brut_val = cash / (1.0 + commission_rate);
+                            position = brut_val / prices[i];
+                            cash = 0.0;
+                        } else if (rsi[i] > ob && position > 0.0) {
+                            // Vente
+                            double brut_val = position * prices[i];
+                            double commission = brut_val * commission_rate;
+                            cash = brut_val - commission;
+                            position = 0.0;
+                        }
+                    }
+                    double final_value = cash + (position * prices[n-1]);
+                    double ret = ((final_value - initial_cash) / initial_cash) * 100.0;
+                    
+                    if (ret > max_return) {
+                        max_return = ret;
+                        opt_w = w;
+                        opt_os = os;
+                        opt_ob = ob;
+                    }
+                }
+            }
+        }
+        delete[] rsi;
+        if (best_window) *best_window = opt_w;
+        if (best_oversold) *best_oversold = opt_os;
+        if (best_overbought) *best_overbought = opt_ob;
+        return max_return;
+    }
 }

@@ -1,6 +1,35 @@
+# ── ENVIRONNEMENT & CACHE PYTHON ─────────────────────────────────────
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 
+# ── CONFIGURATION STREAMLIT ──────────────────────
 .streamlit/
-.streamlit/
+
+# ── BASES DE DONNÉES LOCALES ──
+# Bloque tous les fichiers .db
+data/bronze/*.db
+data/silver/*.db
+data/gold/*.db
+data/portfolio/*.db
+*.db
+*.sqlite3
+
+# ── COMPILATION C++ ───────────────────────────
+# Si tu as compilé ton outil C++ en local, on évite d'envoyer les binaires
+*.exe
+*.out
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+build/
+
+# ── CONFIGURATION ÉDITEUR ─────────────────────
+.vscode/
+.idea/
+.DS_Store

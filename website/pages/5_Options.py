@@ -1,3 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from website.components.assistant_sidebar import render_assistant
+from website.components.ui_config import set_global_ui
+set_global_ui()
+render_assistant()
 """
 5_📐_Options_3D.py — Pricing d'options Black-Scholes + surface 3D + Greeks
 """

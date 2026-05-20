@@ -131,11 +131,21 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL
     )
     """)
+    
+    # Migration douce : si l'ancienne colonne 'email' existe, on la renomme
+    try:
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if "email" in cols and "username" not in cols:
+            cursor.execute("ALTER TABLE users RENAME COLUMN email TO username")
+            conn.commit()
+    except Exception:
+        pass
     
     # Table d'état du portefeuille liée à l'utilisateur
     cursor.execute("""

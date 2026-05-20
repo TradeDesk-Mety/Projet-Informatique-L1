@@ -54,7 +54,20 @@ class TradingBot:
             signal = 0  # 0 = Hold, 1 = Buy, -1 = Sell
             
             if self.strategy == "SMA":
-                # SMA courte vs SMA longue
+                # =====================================================================
+                # STRATÉGIE SMA (Simple Moving Average / Croisement de Moyennes Mobiles)
+                # =====================================================================
+                # Cette stratégie classique repose sur le suivi de tendance (trend following).
+                # Elle utilise deux moyennes mobiles de durées différentes :
+                # 1. Une Moyenne Mobile Courte (ici 5 périodes) : Très réactive aux prix récents.
+                # 2. Une Moyenne Mobile Longue (ici 15 périodes) : Plus lente, elle indique la tendance de fond.
+                #
+                # Le principe de décision (Signaux de trading) :
+                # - Signal d'ACHAT (1) : Lorsque la SMA courte croise la SMA longue à la hausse. 
+                #   Cela indique une dynamique haussière à court terme qui prend le dessus sur la tendance de fond.
+                # - Signal de VENTE (-1) : Lorsque la SMA courte croise la SMA longue à la baisse. 
+                #   Cela indique un essoufflement et une dynamique baissière.
+                # =====================================================================
                 sma_short = sim.calculate_sma(close_prices, 5).iloc[-1]
                 sma_long = sim.calculate_sma(close_prices, 15).iloc[-1]
                 self.log(f"SMA(5): {sma_short:.2f} | SMA(15): {sma_long:.2f} | Cours: {current_price:.2f}")
@@ -64,6 +77,19 @@ class TradingBot:
                     signal = -1
                     
             elif self.strategy == "RSI":
+                # =====================================================================
+                # STRATÉGIE RSI (Relative Strength Index / Indice de Force Relative)
+                # =====================================================================
+                # Le RSI est un oscillateur borné entre 0 et 100 qui mesure la vélocité 
+                # et l'ampleur des mouvements directionnels des prix. 
+                # Il sert principalement à repérer les zones de surachat et de survente.
+                #
+                # Le principe de décision (Signaux de trading) :
+                # - Zone de SURVENTE (RSI < 35) : Le marché a subi une forte pression vendeuse. 
+                #   L'actif est statistiquement "sous-évalué" temporairement. Signal d'ACHAT (1) pour jouer le rebond.
+                # - Zone de SURACHAT (RSI > 65) : Le marché a subi une forte pression acheteuse. 
+                #   L'actif est potentiellement "surévalué" temporairement. Signal de VENTE (-1) pour sécuriser les gains.
+                # =====================================================================
                 rsi_val = sim.calculate_rsi(close_prices, 7).iloc[-1]
                 self.log(f"RSI(7): {rsi_val:.2f} | Cours: {current_price:.2f}")
                 if rsi_val < 35:
@@ -72,7 +98,34 @@ class TradingBot:
                     signal = -1
                     
             elif self.strategy == "ML_RF":
-                # Stratégie Machine Learning (Random Forest)
+                # =====================================================================
+                # STRATÉGIE MACHINE LEARNING (Random Forest Classifier)
+                # =====================================================================
+                # Cette stratégie avancée utilise l'intelligence artificielle pour prédire
+                # la direction future des prix (ici, à un horizon de 3 jours).
+                #
+                # 1. Feature Engineering (Création des variables explicatives) :
+                #    L'algorithme ingère plusieurs indicateurs techniques : 
+                #    - Rendements à 1, 3, et 5 jours (ret1, ret3, ret5).
+                #    - Le ratio entre la SMA(5) et la SMA(15) pour capter la tendance.
+                #    - Le RSI (14 périodes) pour capter les niveaux de surachat/survente.
+                #    - La volatilité sur 10 jours (vol10) pour mesurer le risque actuel.
+                # 
+                # 2. Variable Cible (Target) :
+                #    On veut prédire si le cours de clôture dans 3 jours sera strictement 
+                #    supérieur au cours actuel (1 = Hausse, 0 = Baisse/Stagnation).
+                #
+                # 3. Entraînement du Modèle :
+                #    Un modèle Random Forest (forêt aléatoire) est entraîné sur ces données 
+                #    historiques (1 an). Il est robuste, évite le surapprentissage (max_depth=5),
+                #    et combine les résultats de 50 arbres de décision (n_estimators=50).
+                #
+                # 4. Prise de Décision (Seuil Asymétrique) :
+                #    Le modèle calcule la probabilité (prob_up) que le marché monte.
+                #    - ACHAT (1) : Si le modèle prédit une hausse avec une conviction forte (prob > 55%).
+                #    - VENTE (-1) : Si le modèle prédit une baisse avec une conviction forte (prob < 45%).
+                #    - NEUTRE (0) : En cas d'incertitude (entre 45% et 55%), on ne fait rien pour éviter le bruit.
+                # =====================================================================
                 self.log("Entraînement du modèle Random Forest sur l'historique 1 an...")
                 # On utilise un historique plus large pour l'entraînement
                 df_ml = data.recuperer_historique(ticker_name, "1y", "1d")
@@ -85,13 +138,23 @@ class TradingBot:
                 returns_3d = close_ml.pct_change(3)
                 returns_5d = close_ml.pct_change(5)
                 
-                # Moyennes mobiles
-                sma_5 = sim.calculate_sma(close_ml, 5)
-                sma_15 = sim.calculate_sma(close_ml, 15)
-                sma_ratio = sma_5 / sma_15
+                import finance.finance as fin
                 
-                # Indicateurs RSI et Volatilité
-                rsi_14 = sim.calculate_rsi(close_ml, 14)
+                # Exécution du Grid Search C++ pour trouver les hyperparamètres optimaux
+                self.log("Exécution Grid Search C++ pour optmiser les paramètres des indicateurs...")
+                prices_list = close_ml.tolist()
+                best_short, best_long, ret_sma = fin.grid_search_sma(prices_list)
+                best_rsi_w, best_os, best_ob, ret_rsi = fin.grid_search_rsi(prices_list)
+                
+                self.log(f"Optimum trouvé -> SMA: {best_short}/{best_long} | RSI: {best_rsi_w} (S: {best_os}, A: {best_ob})")
+                
+                # Moyennes mobiles optimisées
+                sma_short_opt = sim.calculate_sma(close_ml, best_short)
+                sma_long_opt = sim.calculate_sma(close_ml, best_long)
+                sma_ratio = sma_short_opt / sma_long_opt
+                
+                # Indicateurs RSI et Volatilité optimisés
+                rsi_opt = sim.calculate_rsi(close_ml, best_rsi_w)
                 vol_10 = returns_1d.rolling(10).std()
                 
                 # Construction de la matrice de features X
@@ -100,7 +163,7 @@ class TradingBot:
                     "ret3": returns_3d,
                     "ret5": returns_5d,
                     "sma_ratio": sma_ratio,
-                    "rsi": rsi_14,
+                    "rsi": rsi_opt,
                     "vol10": vol_10
                 })
                 
@@ -123,14 +186,33 @@ class TradingBot:
                 # Dernière ligne pour la prédiction en direct (on remplit les NaNs éventuels par précaution)
                 latest_features = features.iloc[[-1]].fillna(method="ffill").fillna(0.0)
                 
-                # Modèle Random Forest Classifier
+                # Importation des modules pour l'évaluation et la calibration
                 from sklearn.ensemble import RandomForestClassifier
-                clf = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
-                clf.fit(X_train, y_train)
+                from sklearn.model_selection import cross_val_score, StratifiedKFold
+                from sklearn.calibration import CalibratedClassifierCV
                 
-                # Prédiction et probabilités associées
-                pred = clf.predict(latest_features)[0]
-                prob = clf.predict_proba(latest_features)[0]
+                # 3.1. Modèle de base
+                clf_base = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
+                
+                # 3.2. Vérification de l'Overfitting par Cross-Validation
+                # On utilise un StratifiedKFold pour s'assurer que la répartition des hausses/baisses est respectée
+                cv_folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+                scores = cross_val_score(clf_base, X_train, y_train, cv=cv_folds, scoring='accuracy')
+                acc_mean = scores.mean() * 100
+                acc_std = scores.std() * 100
+                self.log(f"Verification Overfitting (CV 5-Folds): Précision moyenne = {acc_mean:.1f}% (+/- {acc_std:.1f}%)")
+                
+                # 3.3. Algorithme de Calibration (Platt Scaling)
+                # CalibratedClassifierCV vérifie et ajuste la distribution des probabilités du modèle 
+                # pour s'assurer qu'un score de 60% correspond réellement à 60% de chances empiriques.
+                clf_calibrated = CalibratedClassifierCV(estimator=clf_base, method='sigmoid', cv=5)
+                
+                # Entraînement final du modèle calibré sur l'ensemble des données
+                clf_calibrated.fit(X_train, y_train)
+                
+                # 4. Prédiction et probabilités associées (Fiabilisées par la calibration)
+                pred = clf_calibrated.predict(latest_features)[0]
+                prob = clf_calibrated.predict_proba(latest_features)[0]
                 prob_up = prob[1] * 100
                 
                 self.log(f"ML RF: Probabilité de hausse à 3j = {prob_up:.1f}%")

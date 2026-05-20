@@ -1,32 +1,21 @@
-"""
-4_🤖_Bot.py — Interface du robot de trading automatique (SMA, RSI et Machine Learning)
-=====================================================================================
+import sys
+import os
 
-Cette page permet à l'utilisateur d'analyser un actif avec une stratégie choisie,
-de consulter un rapport détaillé (signal, indicateurs, volatilité, action proposée),
-puis d'autoriser ou non l'exécution de l'ordre.
-
-Relations avec les autres modules :
-----------------------------------
-- data.data : fournit la liste des actifs négociables et l'historique de prix.
-- simulation.simulation : calcule les indicateurs techniques (SMA, RSI).
-- equities.equities : exécute et persiste les transactions du portefeuille.
-- data.database : chemin de la base de données SQLite du portefeuille.
-"""
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import streamlit as st
-import os
-import sys
 import pandas as pd
 import numpy as np
 from datetime import datetime
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from sklearn.ensemble import RandomForestClassifier
 
 import data.data as data_mod
 import simulation.simulation as sim
 from equities.equities import Portfolio
 from data.database import PORTFOLIO_DB_PATH
+
+from website.components.assistant_sidebar import render_assistant
+from website.components.ui_config import set_global_ui
 
 # ── Garde d'authentification ──────────────────────────────────────────────────
 if not st.session_state.get("logged_in", False):
@@ -169,7 +158,6 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 y_train = dataset["target"]
                 latest  = features.iloc[[-1]].ffill().fillna(0.0)
 
-                from sklearn.ensemble import RandomForestClassifier
                 clf = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
                 clf.fit(X_train, y_train)
 
@@ -188,20 +176,26 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 else:
                     signal = 0
 
-            # ── Calcul de l'action proposée ───────────────────────────────────
-            proposed = None
+                        # ── Calcul de l'action proposée ─────────────────────────
             if signal == 1:
-                prix_avec_comm = current_price * 1.01
-                qty = int(p.cash // prix_avec_comm)
-                montant = qty * current_price
-                proposed = {"action": "ACHAT", "qty": qty, "prix": current_price, "montant": montant}
+                explanation = (
+                    f"🍯 **Analyse du Bot** : J'ai détecté une **opportunité d'achat forte** sur {bot_asset}. "
+                    f"Les indicateurs de la stratégie **{bot_strat_label}** sont tous au vert. "
+                    f"Cependant, la volatilité historique s'élève à **{volatility:.1f}%**, ce qui implique un risque de fluctuation modéré à court terme. "
+                    f"Je te conseille d'investir de façon responsable en acceptant la possibilité que le marché fluctue de ce pourcentage."
+                )
             elif signal == -1:
-                if bot_asset in p.positions:
-                    qty = p.positions[bot_asset]["quantity"]
-                    montant = qty * current_price
-                    proposed = {"action": "VENTE", "qty": qty, "prix": current_price, "montant": montant}
-                else:
-                    proposed = {"action": "VENTE", "qty": 0, "prix": current_price, "montant": 0}
+                explanation = (
+                    f"⚠️ **Analyse du Bot** : Mes algorithmes pointent vers un **repli imminent** sur {bot_asset}. "
+                    f"Il est temps de se désengager partiellement ou totalement pour sécuriser tes profits ou limiter la casse, car la volatilité de **{volatility:.1f}%** "
+                    f"pourrait amplifier cette tendance baissière."
+                )
+            else:
+                explanation = (
+                    f"⏸️ **Analyse du Bot** : Le marché de {bot_asset} est actuellement **neutre**. "
+                    f"Je ne détecte aucune tendance directionnelle fiable sur la base des indicateurs de {bot_strat_label}. "
+                    f"Mieux vaut conserver tes liquidités pour le moment."
+                )
 
             # Sauvegarde dans la session
             st.session_state.bot_analysis = {
@@ -212,6 +206,7 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 "volatility": volatility,
                 "indicators": indicators,
                 "proposed": proposed,
+                "explanation": explanation,
             }
             add_log(
                 f"Analyse {bot_strat} sur {bot_asset} : signal="
@@ -238,10 +233,11 @@ if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_stra
     with st.expander(
         f"📊 Rapport d'analyse — {bot_asset} ({bot_strat_label})", expanded=True
     ):
-        # Signal principal
+        # Signal principal et Explication Narrative du Bot
         st.markdown(
-            f"### Signal : {SIGNAL_COLORS[signal]} **{SIGNAL_LABELS[signal]}**"
+            f"### Signal détecté : {SIGNAL_COLORS[signal]} **{SIGNAL_LABELS[signal]}**"
         )
+        st.info(analysis["explanation"])
 
         # Indicateurs
         st.markdown("#### 📐 Indicateurs techniques")

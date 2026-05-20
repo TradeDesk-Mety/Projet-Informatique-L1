@@ -2,6 +2,7 @@ import os
 import sqlite3
 import yfinance as yf
 import pandas as pd
+import streamlit as st
 from data.database import SILVER_DB_PATH
 
 PERIODES_VALIDES = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
@@ -1050,6 +1051,7 @@ def verifier_action(action_choisie)->bool :
     return action_choisie in MARKET
     
 #Récupération de l'historique d'une action en fonction de sa période (temps total) et de son intervalle (temps à laquelle il prend les bougies sur la période)
+@st.cache_data(ttl=60)
 def recuperer_historique(action_choisie, periode : str, intervalle : str, force_download: bool = False)-> pd.DataFrame:
     if not verifier_action(action_choisie):
         raise ValueError(f"'{action_choisie}' n'est pas dans le dictionnaire.")
@@ -1094,6 +1096,7 @@ def recuperer_historique(action_choisie, periode : str, intervalle : str, force_
     
 
 #Récupération du prix actuel de l'action
+@st.cache_data(ttl=60)
 def recuperer_prix_actuel(action_choisie, periode: str) -> float:
     if not verifier_action(action_choisie):
         raise ValueError(f"'{action_choisie}' n'est pas dans le dictionnaire.")

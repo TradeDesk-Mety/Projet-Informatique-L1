@@ -117,6 +117,11 @@ def backtest_strategy(prices: pd.Series, strategy_type: str = "SMA", params: dic
         "prices":              prices.tolist(),
         "signals":             signals.tolist(),
         "portfolio_history":   portfolio_history.tolist(),
+        "equity_curve":        portfolio_history.tolist(),   # alias utilisé par le mode Comparatif
+        "benchmark_curve":     [                             # alias utilisé par le mode Comparatif
+            (initial_cash / (1 + commission_rate) / prices.iloc[0]) * p
+            for p in prices.tolist()
+        ],
         "portfolio_history_bh": [
             (initial_cash / (1 + commission_rate) / prices.iloc[0]) * p
             for p in prices.tolist()
@@ -127,4 +132,57 @@ def backtest_strategy(prices: pd.Series, strategy_type: str = "SMA", params: dic
         "trades_count":        trades_count,
         "total_commission":    total_commission,
         "max_drawdown":        max_drawdown,
+    }
+
+def monte_carlo_simulation(prices: pd.Series, days_to_simulate: int = 30, num_simulations: int = 100) -> dict:
+    """
+    Exécute une simulation de Monte-Carlo basée sur le Mouvement Brownien Géométrique (GBM).
+    
+    L'idée est de générer plusieurs scénarios (chemins) possibles pour le prix futur
+    en se basant sur la dérive (drift) historique et la volatilité historique.
+    """
+    if len(prices) < 2:
+        return {"error": "Pas assez de données pour la simulation de Monte-Carlo."}
+        
+    # Calcul des rendements journaliers historiques
+    returns = prices.pct_change().dropna()
+    
+    # Calcul de la dérive (drift) et de la volatilité
+    mu = returns.mean()
+    sigma = returns.std()
+    
+    # Drift (dérive théorique du mouvement brownien géométrique)
+    drift = mu - (0.5 * sigma**2)
+    
+    # Prix de départ pour la simulation
+    last_price = prices.iloc[-1]
+    
+    # Matrice pour stocker tous les chemins simulés
+    # Lignes = jours simulés, Colonnes = numéro de simulation
+    simulated_paths = np.zeros((days_to_simulate, num_simulations))
+    
+    for i in range(num_simulations):
+        # Génération des chocs aléatoires (Z ~ N(0, 1))
+        Z = np.random.normal(0, 1, days_to_simulate)
+        
+        # Calcul des rendements simulés : e^(drift + sigma * Z)
+        daily_returns_simulated = np.exp(drift + sigma * Z)
+        
+        # Construction du chemin de prix en cascade
+        price_path = np.zeros(days_to_simulate)
+        price_path[0] = last_price * daily_returns_simulated[0]
+        for t in range(1, days_to_simulate):
+            price_path[t] = price_path[t-1] * daily_returns_simulated[t]
+            
+        simulated_paths[:, i] = price_path
+        
+    # On calcule la trajectoire moyenne de tous les scénarios
+    mean_path = simulated_paths.mean(axis=1)
+    
+    return {
+        "last_price": last_price,
+        "days_to_simulate": days_to_simulate,
+        "num_simulations": num_simulations,
+        "mean_path": mean_path.tolist(),
+        "paths": simulated_paths.tolist()
     }

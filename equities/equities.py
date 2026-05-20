@@ -233,8 +233,9 @@ class Portfolio:
                     "commission": float(row[5]),
                     "total_net": float(row[6])
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            import warnings
+            warnings.warn(f"Erreur chargement portefeuille depuis DB: {e}", RuntimeWarning)
         finally:
             conn.close()
 

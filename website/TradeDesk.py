@@ -21,6 +21,8 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from equities.equities import Portfolio
+from website.components.ui_config import set_global_ui
+from website.components.assistant_sidebar import render_assistant
 from data.database import PORTFOLIO_DB_PATH, get_portfolio_connection
 from data.security import hash_password, verify_password
 
@@ -31,109 +33,20 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+set_global_ui()
 
 # ─── CSS Global — Style Revolut ───────────────────────────────────────────────
-st.markdown("""
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-  *, *::before, *::after { box-sizing: border-box; }
-
-  html, body, [data-testid="stAppViewContainer"] {
-    font-family: 'Inter', sans-serif !important;
-    background: #0A0B0D !important;
-    color: #E8ECF0 !important;
-  }
-
-  /* Sidebar */
-  [data-testid="stSidebar"] {
-    background: #0F1011 !important;
-    border-right: 1px solid #1E2028 !important;
-  }
-  [data-testid="stSidebar"] * { font-family: 'Inter', sans-serif !important; }
-
-  /* Titres */
-  h1, h2, h3, h4 { color: #F0F4F8 !important; font-weight: 700 !important; }
-
-  /* Inputs */
-  input[type="text"], input[type="password"], input[type="email"],
-  [data-testid="stTextInput"] input {
-    background: #111318 !important;
-    border: 1px solid #2A2D38 !important;
-    border-radius: 10px !important;
-    color: #E8ECF0 !important;
-    font-family: 'Inter', sans-serif !important;
-    transition: border-color 0.2s;
-  }
-  [data-testid="stTextInput"] input:focus {
-    border-color: #06B6D4 !important;
-    box-shadow: 0 0 0 3px rgba(6,182,212,0.15) !important;
-  }
-
-  /* Buttons primary */
-  .stButton > button[kind="primary"],
-  .stButton > button {
-    background: linear-gradient(135deg, #06B6D4 0%, #2563EB 100%) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    color: #fff !important;
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em !important;
-    transition: opacity 0.2s, transform 0.1s !important;
-    padding: 0.55rem 1.2rem !important;
-  }
-  .stButton > button:hover { opacity: 0.88 !important; transform: translateY(-1px) !important; }
-  .stButton > button:active { transform: translateY(0) !important; }
-
-  /* Cards / metrics */
-  .stMetric {
-    background: #111318 !important;
-    border: 1px solid #1E2028 !important;
-    border-radius: 14px !important;
-    padding: 18px 20px !important;
-  }
-  [data-testid="metric-container"] {
-    background: #111318 !important;
-    border: 1px solid #1E2028 !important;
-    border-radius: 14px !important;
-    padding: 16px !important;
-  }
-
-  /* Tabs */
-  [data-testid="stTabs"] button {
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-    color: #8A94A6 !important;
-  }
-  [data-testid="stTabs"] button[aria-selected="true"] {
-    color: #06B6D4 !important;
-    border-bottom: 2px solid #06B6D4 !important;
-  }
-
-  /* Divider */
-  hr { border-color: #1E2028 !important; }
-
-  /* Slider */
-  [data-testid="stSlider"] .st-emotion-cache-1gv3huu,
-  [data-testid="stSlider"] [data-testid="stThumbValue"] {
-    color: #06B6D4 !important;
-  }
-
-  /* Success / error banners */
-  [data-testid="stAlert"] { border-radius: 10px !important; }
-</style>
-""", unsafe_allow_html=True)
 
 # ─── Initialisation de l'état de session ─────────────────────────────────────
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
-if "user_email" not in st.session_state:
-    st.session_state.user_email = None
-if "show_welcome" not in st.session_state:
-    st.session_state.show_welcome = False
+if "user_username" not in st.session_state:
+    st.session_state.user_username = None
+if "show_onboarding" not in st.session_state:
+    st.session_state.show_onboarding = False
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE DE CONNEXION / INSCRIPTION
@@ -173,8 +86,8 @@ if not st.session_state.logged_in:
         # ── Onglet Connexion ──────────────────────────────────────────────────
         with tab_login:
             st.markdown("<br>", unsafe_allow_html=True)
-            email = st.text_input(
-                "Adresse e-mail", placeholder="vous@example.com", key="login_email"
+            username = st.text_input(
+                "Nom d'utilisateur", placeholder="Votre pseudo", key="login_email"
             )
             mdp = st.text_input(
                 "Mot de passe", type="password", placeholder="••••••••", key="login_mdp"
@@ -182,14 +95,14 @@ if not st.session_state.logged_in:
             st.markdown("<br>", unsafe_allow_html=True)
 
             if st.button("Se connecter", type="primary", use_container_width=True, key="btn_login"):
-                if not email or not mdp:
+                if not username or not mdp:
                     st.error("Veuillez remplir tous les champs.")
                 else:
                     conn = get_portfolio_connection()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT id, password_hash FROM users WHERE email = ?",
-                        (email.strip().lower(),)
+                        "SELECT id, password_hash FROM users WHERE username = ?",
+                        (username.strip().lower(),)
                     )
                     row = cursor.fetchone()
                     conn.close()
@@ -198,14 +111,14 @@ if not st.session_state.logged_in:
                         user_id = row[0]
                         st.session_state.logged_in = True
                         st.session_state.user_id = user_id
-                        st.session_state.user_email = email.strip()
-                        st.session_state.show_welcome = True
+                        st.session_state.user_username = username.strip()
 
                         p = Portfolio(initial_cash=10000.0)
                         p.load_from_db(user_id)
                         st.session_state.portfolio = p
 
                         st.success("✅ Connexion réussie !")
+                        st.session_state.show_onboarding = True
                         st.rerun()
                     else:
                         st.error("Identifiants incorrects.")
@@ -213,8 +126,8 @@ if not st.session_state.logged_in:
         # ── Onglet Inscription ────────────────────────────────────────────────
         with tab_register:
             st.markdown("<br>", unsafe_allow_html=True)
-            new_email = st.text_input(
-                "Adresse e-mail", placeholder="vous@example.com", key="reg_email"
+            new_username = st.text_input(
+                "Nom d'utilisateur", placeholder="Votre pseudo", key="reg_email"
             )
             new_mdp = st.text_input(
                 "Mot de passe", type="password",
@@ -243,8 +156,10 @@ if not st.session_state.logged_in:
             st.markdown("</div>", unsafe_allow_html=True)
 
             if st.button("Créer mon compte", type="primary", use_container_width=True, key="btn_reg"):
-                if not new_email or not new_mdp:
+                if not new_username or not new_mdp:
                     st.error("Veuillez remplir tous les champs.")
+                elif len(new_username.strip()) < 3:
+                    st.error("Le nom d'utilisateur doit faire au moins 3 caractères.")
                 elif len(new_mdp) < 4:
                     st.error("Le mot de passe doit faire au moins 4 caractères.")
                 elif new_mdp != new_mdp_c:
@@ -253,18 +168,18 @@ if not st.session_state.logged_in:
                     conn = get_portfolio_connection()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT id FROM users WHERE email = ?",
-                        (new_email.strip().lower(),)
+                        "SELECT id FROM users WHERE username = ?",
+                        (new_username.strip().lower(),)
                     )
                     if cursor.fetchone():
-                        st.error("Cette adresse e-mail est déjà enregistrée.")
+                        st.error("Ce nom d'utilisateur est déjà pris.")
                         conn.close()
                     else:
                         pwd_hash = hash_password(new_mdp)
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         cursor.execute(
-                            "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-                            (new_email.strip().lower(), pwd_hash, now_str)
+                            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                            (new_username.strip().lower(), pwd_hash, now_str)
                         )
                         user_id = cursor.lastrowid
                         conn.commit()
@@ -306,7 +221,7 @@ with st.sidebar:
     st.divider()
 
     # Identité de l'utilisateur
-    email_display = st.session_state.user_email or ""
+    email_display = st.session_state.get("user_username") or ""
     st.markdown(f"""
     <div style='background:#111318; border:1px solid #1E2028; border-radius:12px;
                 padding:12px 14px; margin-bottom:16px;'>
@@ -357,7 +272,7 @@ with st.sidebar:
     if st.button("🚪 Se déconnecter", use_container_width=True, key="btn_logout"):
         st.session_state.logged_in = False
         st.session_state.user_id = None
-        st.session_state.user_email = None
+        st.session_state.user_username = None
         st.session_state.show_welcome = False
         if "portfolio" in st.session_state:
             del st.session_state.portfolio
@@ -368,10 +283,10 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Message de bienvenue post-login ──────────────────────────────────────────
-if st.session_state.get("show_welcome", False):
-    st.session_state.show_welcome = False   # n'afficher qu'une fois par session
+if st.session_state.get("show_onboarding", False):
+    st.session_state.show_onboarding = False
 
-    prenom = (st.session_state.user_email or "").split("@")[0].capitalize()
+    prenom = (st.session_state.get("user_username") or "Trader").capitalize()
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,rgba(6,182,212,0.12),rgba(37,99,235,0.10));
                 border:1px solid rgba(6,182,212,0.3); border-radius:18px;
