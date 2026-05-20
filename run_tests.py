@@ -5,7 +5,7 @@ import os
 
 def run_all_tests():
     print("=" * 60)
-    print("   Lancement de la suite de tests complète (Projet L1)   ")
+    print("   Lancement de la suite de tests complète   ")
     print("=" * 60)
     
     # Chemin vers le dossier tests
