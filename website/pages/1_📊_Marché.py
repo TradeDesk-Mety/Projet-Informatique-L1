@@ -1,9 +1,26 @@
 """
-1_📊_Marché.py — Page Marché : cours en direct + analyse technique avancée
+1_📊_Marché.py — Page Marché : cours en direct + analyse technique et quantitative
+==============================================================================
+
+Cette page affiche les cours de la bourse en temps réel ou historique et permet de faire :
+1. Un suivi intraday temps réel 1 min avec VWAP et jauge de force relative (RSI).
+2. Des graphiques en chandeliers japonais avec indicateurs (Moyennes Mobiles, Bandes de Bollinger, RSI).
+3. Une analyse de la volatilité historique glissante et des anomalies de volumes (pics de volume).
+4. Des statistiques descriptives complètes sur l'actif (Sharpe, Bêta vs S&P 500, Skewness, Kurtosis).
+5. L'étude de la distribution empirique des rendements journaliers.
+6. L'étude de la corrélation historique des rendements d'un panier d'actifs.
+
+Relations avec les autres modules :
+----------------------------------
+- data.data : gère l'extraction des données depuis Yahoo Finance et les met en cache.
+- greeks.greeks : calcule les indicateurs quantitatifs (volatilité, ratio de Sharpe, Bêta).
+- visualisation.visualisation : génère les graphiques interactifs en Plotly.
 """
+
 import streamlit as st
 import pandas as pd
-import os, sys, time
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
@@ -30,15 +47,29 @@ with col_int:
 
 st.divider()
 
-# ── Onglets ───────────────────────────────────────────────────────────────────
-tab_rt, tab_hist, tab_stats, tab_dist, tab_corr = st.tabs([
-    "⚡ Temps Réel", "📈 Historique", "📐 Statistiques", "📉 Rendements", "🔗 Corrélation"
+# ── Onglets de navigation ─────────────────────────────────────────────────────
+tab_rt, tab_hist, tab_vvol, tab_stats, tab_dist, tab_corr = st.tabs([
+    "⚡ Temps Réel", "📈 Historique", "📊 Volatilité & Volume", "📐 Statistiques", "📉 Rendements", "🔗 Corrélation"
 ])
 
 # ─────────────────────── TAB 1 : TEMPS RÉEL ──────────────────────────────────
 with tab_rt:
     st.subheader(f"⚡ Cours en direct — {selected}")
     st.caption("Données intraday 1 minute — rafraîchi toutes les 30 secondes")
+
+    col_scale, col_empty = st.columns([3, 1])
+    with col_scale:
+        scale_mode = st.radio(
+            "Échelle de l'axe Y", 
+            ["Automatique", "Zoom serré (Min/Max)", "Logarithmique"], 
+            horizontal=True,
+            key=f"scale_{selected}"
+        )
+        y_mode = "Auto"
+        if "Zoom" in scale_mode:
+            y_mode = "Zoom serré"
+        elif "Log" in scale_mode:
+            y_mode = "Logarithmique"
 
     placeholder_price  = st.empty()
     placeholder_chart  = st.empty()
@@ -68,7 +99,7 @@ with tab_rt:
             c4.metric("Plus bas (J)",  f"{df_rt['Low'].min():.2f}")
 
         with placeholder_chart.container():
-            st.plotly_chart(vis.plot_realtime(df_rt, selected, price_rt), use_container_width=True)
+            st.plotly_chart(vis.plot_realtime(df_rt, selected, price_rt, y_scale_mode=y_mode), use_container_width=True)
 
         # RSI sur données intraday
         delta_s = df_rt["Close"].diff()
@@ -79,7 +110,7 @@ with tab_rt:
         with placeholder_gauge.container():
             st.plotly_chart(vis.plot_rsi_gauge(rsi_rt, selected), use_container_width=True)
     else:
-        st.warning("Données intraday indisponibles. Marché peut-être fermé.")
+        st.warning("Données intraday indisponibles. Le marché correspondant à cet actif est probablement fermé actuellement.")
 
     if st.button("🔄 Rafraîchir maintenant", key="rt_refresh"):
         st.cache_data.clear()
@@ -94,9 +125,25 @@ with tab_hist:
     except Exception as e:
         st.error(f"Erreur de chargement : {e}")
 
-# ─────────────────────── TAB 3 : STATISTIQUES ────────────────────────────────
+# ─────────────────────── TAB 3 : VOLATILITÉ & VOLUME ─────────────────────────
+with tab_vvol:
+    st.subheader(f"📊 Analyse Quantitative : Volatilité et Volumes — {selected}")
+    try:
+        df_vv = data_mod.recuperer_historique(selected, "1y", "1d")
+        if not df_vv.empty and len(df_vv) > 20:
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                st.plotly_chart(vis.plot_rolling_volatility(df_vv["Close"], selected), use_container_width=True)
+            with col_v2:
+                st.plotly_chart(vis.plot_volume_breakout(df_vv, selected), use_container_width=True)
+        else:
+            st.info("Données historiques insuffisantes pour tracer la volatilité glissante et les breakouts de volume (20 jours d'historique requis).")
+    except Exception as e:
+        st.error(f"Erreur : {e}")
+
+# ─────────────────────── TAB 4 : STATISTIQUES ────────────────────────────────
 with tab_stats:
-    st.subheader(f"📐 Statistiques — {selected}")
+    st.subheader(f"📐 Statistiques & Ratio de Risque — {selected}")
     try:
         df_s   = data_mod.recuperer_historique(selected, "1y", "1d")
         close  = df_s["Close"]
@@ -120,12 +167,12 @@ with tab_stats:
         c7.metric("Skewness", f"{rets.skew():.2f}")
         c8.metric("Kurtosis", f"{rets.kurtosis():.2f}")
 
-        # Tableau des données
+        # Tableau des données historiques récentes
         st.dataframe(df_s.tail(30).style.format("{:.2f}"), use_container_width=True)
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# ─────────────────────── TAB 4 : DISTRIBUTION ────────────────────────────────
+# ─────────────────────── TAB 5 : DISTRIBUTION ────────────────────────────────
 with tab_dist:
     st.subheader(f"📉 Distribution des Rendements — {selected}")
     try:
@@ -134,9 +181,9 @@ with tab_dist:
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# ─────────────────────── TAB 5 : CORRÉLATION ─────────────────────────────────
+# ─────────────────────── TAB 6 : CORRÉLATION ─────────────────────────────────
 with tab_corr:
-    st.subheader("🔗 Matrice de Corrélation")
+    st.subheader("🔗 Matrice de Corrélation entre Rendements")
     default_assets = ["Apple Inc.", "Microsoft", "Nvidia", "Amazon", "Tesla, Inc.",
                       "Alphabet Inc. (Class A)", "Meta Platforms", "JPMorgan Chase", "Berkshire Hathaway"]
     valid_assets   = [a for a in default_assets if a in data_mod.MARKET]
