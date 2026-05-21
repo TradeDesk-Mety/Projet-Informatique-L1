@@ -160,22 +160,22 @@ class Portfolio:
             cursor = conn.cursor()
             
             # 1. Sauvegarde du solde cash
-            cursor.execute("DELETE FROM portfolio_state WHERE user_id = ?", (user_id,))
-            cursor.execute("INSERT INTO portfolio_state (user_id, cash, initial_cash) VALUES (?, ?, ?)", 
+            cursor.execute("DELETE FROM portfolio_state WHERE user_id = %s", (user_id,))
+            cursor.execute("INSERT INTO portfolio_state (user_id, cash, initial_cash) VALUES (%s, %s, %s)", 
                            (user_id, self.cash, self.initial_cash))
             
             # 2. Sauvegarde des positions
-            cursor.execute("DELETE FROM portfolio_positions WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM portfolio_positions WHERE user_id = %s", (user_id,))
             for ticker, pos in self.positions.items():
-                cursor.execute("INSERT INTO portfolio_positions (user_id, asset, quantity, avg_price) VALUES (?, ?, ?, ?)",
+                cursor.execute("INSERT INTO portfolio_positions (user_id, asset, quantity, avg_price) VALUES (%s, %s, %s, %s)",
                                (user_id, ticker, pos["quantity"], pos["avg_price"]))
                                
             # 3. Sauvegarde de l'historique des transactions
-            cursor.execute("DELETE FROM portfolio_transactions WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM portfolio_transactions WHERE user_id = %s", (user_id,))
             for trade in self.transactions:
                 cursor.execute("""
                 INSERT INTO portfolio_transactions (user_id, timestamp, type, asset, quantity, price, commission, total_net)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     user_id,
                     trade["timestamp"],
@@ -199,20 +199,20 @@ class Portfolio:
             cursor = conn.cursor()
             
             # 1. Chargement du cash
-            cursor.execute("SELECT cash, initial_cash FROM portfolio_state WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT cash, initial_cash FROM portfolio_state WHERE user_id = %s", (user_id,))
             row = cursor.fetchone()
             if row:
                 self.cash = row[0]
                 self.initial_cash = row[1]
                 
             # 2. Chargement des positions
-            cursor.execute("SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = %s", (user_id,))
             self.positions = {}
             for row in cursor.fetchall():
                 self.positions[row[0]] = {"quantity": int(row[1]), "avg_price": float(row[2])}
                 
             # 3. Chargement des transactions
-            cursor.execute("SELECT timestamp, type, asset, quantity, price, commission, total_net FROM portfolio_transactions WHERE user_id = ? ORDER BY id ASC", (user_id,))
+            cursor.execute("SELECT timestamp, type, asset, quantity, price, commission, total_net FROM portfolio_transactions WHERE user_id = %s ORDER BY id ASC", (user_id,))
             self.transactions = []
             for row in cursor.fetchall():
                 self.transactions.append({
