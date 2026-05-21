@@ -25,7 +25,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 import data.data as data_mod
 import finance.finance as fin
-from data.database import PORTFOLIO_DB_PATH
 from greeks.greeks import calculate_historical_volatility
 
 if not st.session_state.get("logged_in", False):
@@ -37,7 +36,7 @@ user_id = st.session_state.user_id
 
 
 def save():
-    p.save_to_db(user_id, PORTFOLIO_DB_PATH)
+    p.save_to_db(user_id)
 
 
 st.title("Portefeuille & Ordres")
@@ -411,6 +410,7 @@ with tab_hist_tx:
             "timestamp": "Date & Heure",
             "type": "Type",
             "ticker": "Actif",
+            "asset": "Actif",
             "quantity": "Quantité",
             "price": "Prix unitaire (€)",
             "commission": "Commission (€)",

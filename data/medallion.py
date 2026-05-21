@@ -15,7 +15,7 @@ def run_bronze_layer(asset_name: str, period: str = "1y", interval: str = "1d") 
     if df_raw.empty:
         raise ValueError(f"Aucune donnée récupérée pour {asset_name}")
     
-    # Préparation des colonnes pour la base de données SQL
+    # Préparation des données
     df_db = df_raw.copy()
     df_db.index = df_db.index.strftime("%Y-%m-%d %H:%M:%S")
     df_db.index.name = "date"
@@ -29,12 +29,20 @@ def run_bronze_layer(asset_name: str, period: str = "1y", interval: str = "1d") 
     conn = db.get_bronze_connection()
     try:
         cursor = conn.cursor()
-        # Nettoyer l'ancien historique pour éviter les doublons
-        cursor.execute("DELETE FROM bronze_prices WHERE asset = ?", (asset_name,))
-        # Insertion des données brutes
-        df_db.to_sql("bronze_prices", conn, if_exists="append", index=False)
+        # Nettoyer l'ancien historique (%s au lieu de ?)
+        cursor.execute("DELETE FROM bronze_prices WHERE asset = %s", (asset_name,))
+        
+        # Insertion optimisée pour PostgreSQL (remplace to_sql qui pose problème)
+        values = [tuple(x) for x in df_db.to_numpy()]
+        insert_query = """
+            INSERT INTO bronze_prices (asset, date, open, high, low, close, volume) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (asset, date) DO NOTHING
+        """
+        cursor.executemany(insert_query, values)
         conn.commit()
     finally:
+        cursor.close()
         conn.close()
         
     return f"DB bronze: bronze_prices ({asset_name})"
@@ -45,12 +53,11 @@ def run_silver_layer(asset_name: str) -> str:
     nettoie les valeurs manquantes, calcule les rendements journaliers,
     ajoute les indicateurs techniques (SMA, RSI) et les sauvegarde dans 'silver_prices'.
     """
-    # Lecture depuis Bronze
     conn_bronze = db.get_bronze_connection()
     try:
-        # Chargement depuis SQL dans un DataFrame
+        # Chargement depuis PostgreSQL (%s au lieu de ?)
         df = pd.read_sql_query(
-            "SELECT * FROM bronze_prices WHERE asset = ?", 
+            "SELECT * FROM bronze_prices WHERE asset = %s", 
             conn_bronze, 
             params=(asset_name,), 
             index_col="date"
@@ -62,9 +69,8 @@ def run_silver_layer(asset_name: str) -> str:
         raise FileNotFoundError(f"Données Bronze introuvables en base pour {asset_name}. Lancez la couche Bronze.")
         
     df.index = pd.to_datetime(df.index)
-    # Nettoyage des données
     df = df.dropna()
-    df = df.sort_index() # Tri chronologique
+    df = df.sort_index()
     
     # Calcul des indicateurs techniques
     df["daily_return"] = df["close"].pct_change()
@@ -72,7 +78,9 @@ def run_silver_layer(asset_name: str) -> str:
     df["sma_50"] = sim.calculate_sma(df["close"], 50)
     df["rsi_14"] = sim.calculate_rsi(df["close"], 14)
     
-    # Réinitialisation de l'index pour stockage SQL
+    # Gestion des valeurs NaN générées par les fenêtres glissantes (SMA/RSI)
+    df = df.replace({np.nan: None})
+    
     df.index = df.index.strftime("%Y-%m-%d %H:%M:%S")
     df.index.name = "date"
     df = df.reset_index()
@@ -81,10 +89,19 @@ def run_silver_layer(asset_name: str) -> str:
     conn_silver = db.get_silver_connection()
     try:
         cursor = conn_silver.cursor()
-        cursor.execute("DELETE FROM silver_prices WHERE asset = ?", (asset_name,))
-        df.to_sql("silver_prices", conn_silver, if_exists="append", index=False)
+        cursor.execute("DELETE FROM silver_prices WHERE asset = %s", (asset_name,))
+        
+        # Insertion optimisée pour PostgreSQL
+        values = [tuple(x) for x in df.to_numpy()]
+        insert_query = """
+            INSERT INTO silver_prices (asset, date, open, high, low, close, volume, daily_return, sma_20, sma_50, rsi_14) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (asset, date) DO NOTHING
+        """
+        cursor.executemany(insert_query, values)
         conn_silver.commit()
     finally:
+        cursor.close()
         conn_silver.close()
         
     return f"DB silver: silver_prices ({asset_name})"
@@ -96,16 +113,15 @@ def run_gold_layer(asset_name: str, benchmark_name: str = "S&P 500 ETF (Tradable
     """
     conn_silver = db.get_silver_connection()
     try:
-        # Si le benchmark n'est pas prêt, on le prépare en arrière-plan
         try:
             run_bronze_layer(benchmark_name)
             run_silver_layer(benchmark_name)
         except Exception:
             pass
             
-        # Charger les données nettoyées Silver de l'actif
+        # Charger l'actif (%s au lieu de ?)
         df_asset = pd.read_sql_query(
-            "SELECT * FROM silver_prices WHERE asset = ?", 
+            "SELECT * FROM silver_prices WHERE asset = %s", 
             conn_silver, 
             params=(asset_name,), 
             index_col="date"
@@ -116,9 +132,9 @@ def run_gold_layer(asset_name: str, benchmark_name: str = "S&P 500 ETF (Tradable
         df_asset.index = pd.to_datetime(df_asset.index)
         df_asset = df_asset.sort_index()
         
-        # Charger les données du benchmark
+        # Charger le benchmark (%s au lieu de ?)
         df_bench = pd.read_sql_query(
-            "SELECT * FROM silver_prices WHERE asset = ?", 
+            "SELECT * FROM silver_prices WHERE asset = %s", 
             conn_silver, 
             params=(benchmark_name,), 
             index_col="date"
@@ -126,7 +142,6 @@ def run_gold_layer(asset_name: str, benchmark_name: str = "S&P 500 ETF (Tradable
     finally:
         conn_silver.close()
         
-    # Calcul des KPIs de risque et rendement
     is_crypto = "USD" in data_loader.MARKET.get(asset_name, "")
     vol = grk.calculate_historical_volatility(df_asset["close"], is_crypto=is_crypto)
     sharpe = grk.calculate_sharpe_ratio(df_asset["close"], is_crypto=is_crypto)
@@ -137,25 +152,31 @@ def run_gold_layer(asset_name: str, benchmark_name: str = "S&P 500 ETF (Tradable
         df_bench = df_bench.sort_index()
         beta = grk.calculate_beta(df_asset["close"], df_bench["close"])
     
+    # Nettoyage des valeurs NaN/Inf avant conversion en float pour PostgreSQL
+    vol = None if np.isnan(vol) or np.isinf(vol) else float(vol)
+    sharpe = None if np.isnan(sharpe) or np.isinf(sharpe) else float(sharpe)
+    beta = None if np.isnan(beta) or np.isinf(beta) else float(beta)
+    
     # Stockage consolidé dans Gold
     conn_gold = db.get_gold_connection()
     try:
         cursor = conn_gold.cursor()
-        cursor.execute("DELETE FROM gold_kpis WHERE asset = ?", (asset_name,))
+        cursor.execute("DELETE FROM gold_kpis WHERE asset = %s", (asset_name,))
         cursor.execute("""
         INSERT INTO gold_kpis (asset, last_price, annualized_volatility, sharpe_ratio, beta_vs_market, data_points, last_updated)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             asset_name,
             float(df_asset["close"].iloc[-1]),
-            float(vol),
-            float(sharpe),
-            float(beta),
+            vol,
+            sharpe,
+            beta,
             int(len(df_asset)),
             pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn_gold.commit()
     finally:
+        cursor.close()
         conn_gold.close()
         
     return f"DB gold: gold_kpis ({asset_name})"
@@ -165,7 +186,7 @@ def get_gold_kpis(asset_name: str) -> dict:
     conn = db.get_gold_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM gold_kpis WHERE asset = ?", (asset_name,))
+        cursor.execute("SELECT * FROM gold_kpis WHERE asset = %s", (asset_name,))
         row = cursor.fetchone()
         if row:
             return {
@@ -178,6 +199,7 @@ def get_gold_kpis(asset_name: str) -> dict:
                 "last_updated": row[6]
             }
     finally:
+        cursor.close()
         conn.close()
     return {}
 
@@ -202,32 +224,4 @@ def run_full_pipeline_multithreaded(period: str = "1y", interval: str = "1d", ma
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    benchmark = "S&P 500 ETF (Tradable)"
-    
-    # 1. S'assurer d'abord que le benchmark (S&P 500 ETF) est prêt
-    try:
-        run_bronze_layer(benchmark, period, interval)
-        run_silver_layer(benchmark)
-        run_gold_layer(benchmark, benchmark)
-    except Exception as e:
-        print(f"Alerte : Impossible de pré-charger le benchmark {benchmark} : {e}")
-
-    # 2. Préparer les autres actifs
-    assets_to_update = [asset for asset in data_loader.MARKET.keys() if asset != benchmark]
-    
-    db_lock = threading.Lock()
-    results = {benchmark: True}
-    
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_update_single_asset_thread_safe, asset, period, interval, benchmark, db_lock): asset
-            for asset in assets_to_update
-        }
-        for future in as_completed(futures):
-            asset = futures[future]
-            try:
-                results[asset] = future.result()
-            except Exception:
-                results[asset] = False
-                
-    return results
+    benchmark = "S&P 500 ETF

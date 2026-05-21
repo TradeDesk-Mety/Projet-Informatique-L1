@@ -41,6 +41,10 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
       - Panneau 2 (18%) : Volume coloré (vert/rouge)
       - Panneau 3 (17%) : RSI(14) avec zones surachat/survente
     """
+    # Robustesse PostgreSQL/yfinance : on force la copie et le renommage en Title Case pour le tracé
+    df = df.copy()
+    df.columns = [c.capitalize() for c in df.columns]
+
     rows = 3 if show_volume else 1
     row_heights = [0.65, 0.18, 0.17] if show_volume else [1.0]
     subplot_titles = ([ticker_name, "Volume", "RSI (14)"] if show_volume else [ticker_name])
@@ -98,19 +102,13 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
         fig.add_hrect(y0=0,  y1=30,  fillcolor=colors_up,   opacity=0.07, line_width=0, row=3, col=1)
 
     fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="#0E1117",
-        plot_bgcolor="#0E1117",
-        hovermode="x unified",
-        legend=dict(orientation="h", y=1.02, x=0),
-        xaxis_rangeslider_visible=False,
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=600,
+        template="plotly_dark", paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
+        hovermode="x unified", legend=dict(orientation="h", y=1.02, x=0),
+        xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=40, b=10), height=600,
     )
     fig.update_yaxes(gridcolor="#1F2937")
     fig.update_xaxes(gridcolor="#1F2937")
     return fig
-
 
 def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float, y_scale_mode: str = "Auto") -> go.Figure:
     """Graphique intraday en ligne pour l'affichage temps réel avec contrôle de l'échelle."""
@@ -395,6 +393,10 @@ def plot_rolling_volatility(close: pd.Series, ticker_name: str, window: int = 20
 # ── 10. VOLUME BREAKOUT CHART [NEW] ───────────────────────────────────────────
 def plot_volume_breakout(df: pd.DataFrame, ticker_name: str, window: int = 20) -> go.Figure:
     """Trace les volumes journaliers et met en valeur les pics (> 2 * SMA de volume)."""
+    # Idem, sécurisation des colonnes pour PostgreSQL
+    df = df.copy()
+    df.columns = [c.capitalize() for c in df.columns]
+
     if "Volume" not in df.columns or df.empty:
         return go.Figure()
 
@@ -402,8 +404,6 @@ def plot_volume_breakout(df: pd.DataFrame, ticker_name: str, window: int = 20) -
     sma_vol = volumes.rolling(window).mean()
     threshold = sma_vol * 2.0
     
-    # Couleur des volumes : rouge si baissier, vert si haussier.
-    # Mais si anomalie de volume (breakout), on utilise une couleur plus vive (ex: jaune/or)
     colors = []
     for i in range(len(df)):
         close_p = df["Close"].iloc[i]
@@ -411,33 +411,17 @@ def plot_volume_breakout(df: pd.DataFrame, ticker_name: str, window: int = 20) -
         vol_val = volumes.iloc[i]
         limit = threshold.iloc[i]
         
-        # Détection anomalie
         if not pd.isna(limit) and vol_val > limit:
-            colors.append("#FCD34D") # Or / Jaune vif pour anomalie
+            colors.append("#FCD34D") 
         elif close_p >= open_p:
-            colors.append("rgba(38,166,154,0.6)") # Vert atténué
+            colors.append("rgba(38,166,154,0.6)") 
         else:
-            colors.append("rgba(239,83,80,0.6)") # Rouge atténué
+            colors.append("rgba(239,83,80,0.6)") 
 
     fig = go.Figure()
-    # Volumes
-    fig.add_trace(go.Bar(
-        x=df.index, y=volumes,
-        marker_color=colors,
-        name="Volume"
-    ))
-    # SMA de Volume
-    fig.add_trace(go.Scatter(
-        x=sma_vol.index, y=sma_vol.values,
-        line=dict(color="#60A5FA", width=1.5, dash="dash"),
-        name=f"Moyenne Mobile Volume ({window}j)"
-    ))
-    # Seuil d'anomalie (2 * SMA)
-    fig.add_trace(go.Scatter(
-        x=threshold.index, y=threshold.values,
-        line=dict(color="#F59E0B", width=1.5, dash="dot"),
-        name="Seuil Anomalie (2x MM)"
-    ))
+    fig.add_trace(go.Bar(x=df.index, y=volumes, marker_color=colors, name="Volume"))
+    fig.add_trace(go.Scatter(x=sma_vol.index, y=sma_vol.values, line=dict(color="#60A5FA", width=1.5, dash="dash"), name=f"Moyenne Mobile Volume ({window}j)"))
+    fig.add_trace(go.Scatter(x=threshold.index, y=threshold.values, line=dict(color="#F59E0B", width=1.5, dash="dot"), name="Seuil Anomalie (2x MM)"))
 
     fig.update_layout(
         title=f"Analyse des Volumes & Breakouts (Jaune = Anomalie) — {ticker_name}",

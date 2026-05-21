@@ -184,7 +184,7 @@ class TradingBot:
                 y_train = dataset["target"]
                 
                 # Dernière ligne pour la prédiction en direct (on remplit les NaNs éventuels par précaution)
-                latest_features = features.iloc[[-1]].fillna(method="ffill").fillna(0.0)
+                latest_features = features.iloc[[-1]].ffill().fillna(0.0)
                 
                 # Importation des modules pour l'évaluation et la calibration
                 from sklearn.ensemble import RandomForestClassifier

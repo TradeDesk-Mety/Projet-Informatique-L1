@@ -3,7 +3,7 @@ import sqlite3
 import yfinance as yf
 import pandas as pd
 import streamlit as st
-from data.database import SILVER_DB_PATH
+from data.database import get_silver_connection
 
 PERIODES_VALIDES = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 INTERVALLES_VALIDES = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
@@ -1051,39 +1051,46 @@ def verifier_action(action_choisie)->bool :
     return action_choisie in MARKET
     
 #Récupération de l'historique d'une action en fonction de sa période (temps total) et de son intervalle (temps à laquelle il prend les bougies sur la période)
+# Récupération de l'historique d'une action
 @st.cache_data(ttl=60)
 def recuperer_historique(action_choisie, periode : str, intervalle : str, force_download: bool = False)-> pd.DataFrame:
     if not verifier_action(action_choisie):
         raise ValueError(f"'{action_choisie}' n'est pas dans le dictionnaire.")
     
-    
-        
-    # Tentative de chargement depuis la base de données SQL locale pour un accès instantané
+    # Tentative de chargement depuis la base de données PostgreSQL Cloud
     if not force_download:
         try:
-            if os.path.exists(SILVER_DB_PATH):
-                conn = sqlite3.connect(SILVER_DB_PATH)
-                df_db = pd.read_sql_query(
-                    "SELECT * FROM silver_prices WHERE asset = ?", 
-                    conn, 
-                    params=(action_choisie,), 
-                    index_col="date"
-                )
-                conn.close()
-                if not df_db.empty:
-                    df_db.index = pd.to_datetime(df_db.index)
-                    # Renommer les colonnes pour la compatibilité avec yfinance
-                    df_db = df_db.rename(columns={
-                        "open": "Open",
-                        "high": "High",
-                        "low": "Low",
-                        "close": "Close",
-                        "volume": "Volume"
-                    })
-                    return df_db
+            # 1. On utilise notre fonction de connexion globale
+            from data.database import get_silver_connection
+            conn = get_silver_connection()
+            
+            # 2. On utilise %s à la place du ? pour PostgreSQL
+            df_db = pd.read_sql_query(
+                "SELECT * FROM silver_prices WHERE asset = %s", 
+                conn, 
+                params=(action_choisie,)
+            )
+            conn.close()
+            
+            if not df_db.empty:
+                # Définir la colonne 'date' comme index si elle existe
+                if "date" in df_db.columns:
+                    df_db.set_index("date", inplace=True)
+                df_db.index = pd.to_datetime(df_db.index)
+                
+                # Renommer les colonnes pour la compatibilité avec yfinance
+                df_db = df_db.rename(columns={
+                    "open": "Open",
+                    "high": "High",
+                    "low": "Low",
+                    "close": "Close",
+                    "volume": "Volume"
+                })
+                return df_db
         except Exception:
-            pass # En cas d'erreur de base de données, fallback vers yfinance
+            pass # En cas d'erreur ou table vide, fallback vers yfinance
 
+    # Téléchargement de secours via yfinance
     try :
         ticker = MARKET[action_choisie]
         action = yf.Ticker(ticker)
@@ -1092,7 +1099,6 @@ def recuperer_historique(action_choisie, periode : str, intervalle : str, force_
     
     except Exception as e:
         raise ValueError(f"Erreur lors de la récupération de {action_choisie} pour une période de {periode} et un intervalle de {intervalle}: {e}")
-
     
 
 #Récupération du prix actuel de l'action
