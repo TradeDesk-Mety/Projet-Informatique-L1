@@ -123,7 +123,7 @@ if not st.session_state.logged_in:
                     else:
                         st.error("Identifiants incorrects.")
 
-        # ── Onglet Inscription ────────────────────────────────────────────────
+        # ── Onglet     tion ────────────────────────────────────────────────
         with tab_register:
             st.markdown("<br>", unsafe_allow_html=True)
             new_username = st.text_input(
@@ -177,14 +177,17 @@ if not st.session_state.logged_in:
                     else:
                         pwd_hash = hash_password(new_mdp)
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
                         cursor.execute(
-                            "INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s)",
+                            "INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s) RETURNING id",
                             (new_username.strip().lower(), pwd_hash, now_str)
                         )
-                        user_id = cursor.lastrowid
+                        
+                        user_id = cursor.fetchone()[0]
+                        
                         conn.commit()
                         conn.close()
-
+                        
                         p = Portfolio(initial_cash=float(capital_initial))
                         p.save_to_db(user_id)
 
