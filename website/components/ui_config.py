@@ -22,8 +22,13 @@ def set_global_ui():
       }
       [data-testid="stSidebar"] * { font-family: 'Inter', sans-serif !important; }
 
-      /* Cacher uniquement les flèches de défilement des onglets (pas le toggle sidebar) */
+      /* Cacher les flèches de défilement des onglets */
       [data-testid="stTabs"] [data-testid="stIconMaterial"] { display: none !important; }
+
+      /* Cacher le bouton collapse (keyboard_double_arrow_left) dans la sidebar */
+      [data-testid="stSidebarCollapseButton"] { display: none !important; }
+      button[data-testid="stBaseButton-headerNoPadding"] { display: none !important; }
+      [data-testid="stSidebar"] button[kind="headerNoPadding"] { display: none !important; }
 
       /* ── Bouton toggle sidebar (hamburger) — toujours visible, surtout sur mobile ── */
       [data-testid="collapsedControl"] {
