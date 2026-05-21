@@ -15,7 +15,7 @@ from website.components.assistant_sidebar import render_assistant
 from website.components.ui_config import set_global_ui
 
 if not st.session_state.get("logged_in", False):
-    st.warning("🔒 Connecte-toi depuis la page d'accueil.")
+    st.warning("Connecte-toi depuis la page d'accueil.")
     st.stop()
 
 set_global_ui()
@@ -71,7 +71,7 @@ else:  # Comparatif
 params["initial_cash"] = capital_init
 
 st.divider()
-run_bt = st.button("▶️ Lancer le Backtest", type="primary", use_container_width=False)
+run_bt = st.button("Lancer le Backtest", type="primary", use_container_width=False)
 
 if run_bt:
     with st.spinner("Simulation en cours…"):
