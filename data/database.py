@@ -163,4 +163,4 @@ def init_db():
 try:
     init_db()
 except Exception as e:
-    print(f"Note lors de l'initialisation de la base PostgreSQL Cloud: {e}")
+    print(f"Note lors de l'initialisation de la base PostgreSQL Cloud: {e}")    

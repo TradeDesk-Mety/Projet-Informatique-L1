@@ -168,7 +168,7 @@ if not st.session_state.logged_in:
                     conn = get_portfolio_connection()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT id FROM users WHERE username = ?",
+                        "SELECT id FROM users WHERE username = %s",
                         (new_username.strip().lower(),)
                     )
                     if cursor.fetchone():
@@ -178,7 +178,7 @@ if not st.session_state.logged_in:
                         pwd_hash = hash_password(new_mdp)
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         cursor.execute(
-                            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                            "INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s)",
                             (new_username.strip().lower(), pwd_hash, now_str)
                         )
                         user_id = cursor.lastrowid
