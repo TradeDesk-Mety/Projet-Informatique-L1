@@ -153,9 +153,7 @@ class Portfolio:
 
     def save_to_db(self, user_id: int = 1, db_path: str = None):
         """Sauvegarde l'état du portefeuille pour un utilisateur spécifique dans SQL."""
-        import sqlite3
-        if db_path is None:
-            from data.database import get_portfolio_connection
+        from data.database import get_portfolio_connection
             
         conn = get_portfolio_connection()
         try:
@@ -195,7 +193,7 @@ class Portfolio:
     def load_from_db(self, user_id: int = 1, db_path: str = None):
         """Charge l'état du portefeuille d'un utilisateur spécifique depuis SQL."""
         from data.database import get_portfolio_connection
-        
+
         conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
