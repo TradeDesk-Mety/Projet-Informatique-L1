@@ -21,7 +21,7 @@ render_assistant()
 
 # ── Garde d'authentification ──────────────────────────────────────────────────
 if not st.session_state.get("logged_in", False):
-    st.warning("🔒 Connecte-toi depuis la page d'accueil.")
+    st.warning("Connecte-toi depuis la page d'accueil.")
     st.stop()
 
 p = st.session_state.portfolio
