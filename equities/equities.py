@@ -196,13 +196,12 @@ class Portfolio:
         """Charge l'état du portefeuille d'un utilisateur spécifique depuis SQL."""
         import sqlite3
         if db_path is None:
-            from data.database import DB_PATH
-            db_path = DB_PATH
+            from data.database import get_portfolio_connection
             
-        if not os.path.exists(db_path):
-            return
+        if not get_portfolio_connection():
+            raise ValueError("Erreur lors de la connexion à la base de données.")
             
-        conn = sqlite3.connect(db_path)
+        conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
             
