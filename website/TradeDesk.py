@@ -81,7 +81,7 @@ if not st.session_state.logged_in:
                     margin-top:12px; box-shadow:0 24px 60px rgba(0,0,0,0.5);'>
         """, unsafe_allow_html=True)
 
-        tab_login, tab_register = st.tabs(["🔑 Connexion", "📝 Inscription"])
+        tab_login, tab_register = st.tabs(["Connexion", "Inscription"])
 
         # ── Onglet Connexion ──────────────────────────────────────────────────
         with tab_login:
@@ -245,11 +245,14 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     nav_items = [
-        ("📊", "Marché", "Cours en direct & analyse technique"),
-        ("💼", "Portefeuille", "Ordres, positions & options"),
-        ("🔬", "Backtesting", "Stratégies historiques"),
-        ("🤖", "Bot", "Trading automatique & ML"),
-        ("📐", "Options 3D", "Modèle de Black-Scholes"),
+        ("↗", "Marché", "Cours en direct & analyse technique"),
+        ("◈", "Portefeuille", "Ordres, positions & options"),
+        ("⟳", "Backtesting", "Stratégies historiques"),
+        ("◎", "Bot", "Trading automatique & ML"),
+        ("∇", "Dérivés", "Pricing Black-Scholes & Greeks"),
+        ("◻", "Documentation", "Guides & cours de finance"),
+        ("◐", "Paramètres", "Gestion du compte"),
+        ("◉", "Assistant", "Questions & conseils"),
     ]
     for icon, name, desc in nav_items:
         st.markdown(f"""
@@ -272,7 +275,7 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🚪 Se déconnecter", use_container_width=True, key="btn_logout"):
+    if st.button("Se déconnecter", use_container_width=True, key="btn_logout"):
         st.session_state.logged_in = False
         st.session_state.user_id = None
         st.session_state.user_username = None
@@ -369,19 +372,19 @@ st.markdown("""
 # ── 5 cards horizontales présentant chaque onglet ────────────────────────────
 tabs_info = [
     {
-        "icon": "📊",
+        "icon": "↗",
         "title": "Marché",
         "color_text": "#06B6D4",
         "color_bg": "rgba(6,182,212,0.07)",
         "color_border": "rgba(6,182,212,0.22)",
         "desc": (
             "Consultez les cours en direct sur plus de 1 000 actifs — actions, ETFs et indices. "
-            "Affichez les graphiques en chandeliers avec le VWAP, adaptez l'échelle temporelle "
+            "Affichez les graphiques en chandeliers avec le VWAP, adaptez la période et l'intervalle "
             "et identifiez les tendances en un coup d'œil."
         ),
     },
     {
-        "icon": "💼",
+        "icon": "◈",
         "title": "Portefeuille",
         "color_text": "#7C3AED",
         "color_bg": "rgba(124,58,237,0.07)",
@@ -389,43 +392,42 @@ tabs_info = [
         "desc": (
             "Passez des ordres d'achat et de vente sur des actions ou des options européennes "
             "(Call / Put) pricées en temps réel. Suivez vos positions ouvertes, votre "
-            "performance globale et la valeur de votre portefeuille."
+            "performance globale et consultez l'historique complet de vos transactions."
         ),
     },
     {
-        "icon": "🔬",
+        "icon": "⟳",
         "title": "Backtesting",
         "color_text": "#22C55E",
         "color_bg": "rgba(34,197,94,0.07)",
         "color_border": "rgba(34,197,94,0.22)",
         "desc": (
             "Évaluez la rentabilité d'une stratégie sur des données historiques avant de vous "
-            "lancer. Définissez vos règles (SMA croisement, seuils RSI) et comparez les "
-            "performances avec et sans stratégie."
+            "lancer. Comparez SMA, RSI et VWAP en mode comparatif sur la même période."
         ),
     },
     {
-        "icon": "🤖",
+        "icon": "◎",
         "title": "Bot de Trading",
         "color_text": "#FB923C",
         "color_bg": "rgba(251,146,60,0.07)",
         "color_border": "rgba(251,146,60,0.22)",
         "desc": (
-            "Activez un robot qui passe des ordres automatiquement à votre place. Choisissez "
-            "entre une stratégie de croisement de moyennes mobiles, un signal RSI, ou un "
-            "modèle entraîné par apprentissage automatique (Random Forest)."
+            "Activez un algorithme qui passe des ordres automatiquement. Choisissez "
+            "entre SMA, RSI, VWAP, ou un modèle Machine Learning (Random Forest) "
+            "avec optimisation Grid Search."
         ),
     },
     {
-        "icon": "📐",
-        "title": "Options 3D",
+        "icon": "∇",
+        "title": "Dérivés",
         "color_text": "#F43F5E",
         "color_bg": "rgba(244,63,94,0.07)",
         "color_border": "rgba(244,63,94,0.22)",
         "desc": (
-            "Explorez la surface de prix des options européennes en trois dimensions grâce au "
-            "modèle de Black-Scholes. Faites varier la volatilité, le taux sans risque et "
-            "l'échéance pour comprendre l'impact sur la prime."
+            "Pricez des options européennes avec le modèle Black-Scholes (1973). "
+            "Visualisez la surface 3D du prix en fonction du Strike et de la Maturité, "
+            "et analysez les Greeks : Delta, Gamma, Vega, Theta, Rho."
         ),
     },
 ]
