@@ -168,41 +168,4 @@ def generate_response(query: str, p) -> str:
 
 
 def render_assistant():
-    st.sidebar.divider()
-    st.sidebar.subheader("💬 Assistant TradeDesk")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Message de bienvenue si aucun message
-    if not st.session_state.messages:
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": "👋 Bonjour ! Je suis l'assistant TradeDesk. Pose-moi une question sur la finance, les graphiques, ou ton portefeuille !"
-        })
-
-    chat_container = st.sidebar.container(height=320)
-    for message in st.session_state.messages:
-        with chat_container.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if user_input := st.sidebar.chat_input("Pose une question..."):
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with chat_container.chat_message("user"):
-            st.markdown(user_input)
-
-        portfolio = st.session_state.get("portfolio")
-        if portfolio is None:
-            response = "🔒 Connecte-toi d'abord pour accéder aux fonctionnalités du portefeuille et des recommandations personnalisées."
-        else:
-            response = generate_response(user_input, portfolio)
-
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        with chat_container.chat_message("assistant"):
-            st.markdown(response)
-
-    # Bouton pour réinitialiser la conversation
-    if st.session_state.messages:
-        if st.sidebar.button("🗑️ Effacer la conversation", use_container_width=True):
-            st.session_state.messages = []
-            st.rerun()
+    pass
