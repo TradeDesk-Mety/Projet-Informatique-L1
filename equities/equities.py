@@ -155,10 +155,9 @@ class Portfolio:
         """Sauvegarde l'état du portefeuille pour un utilisateur spécifique dans SQL."""
         import sqlite3
         if db_path is None:
-            from data.database import DB_PATH
-            db_path = DB_PATH
+            from data.database import get_portfolio_connection
             
-        conn = sqlite3.connect(db_path)
+        conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
             
