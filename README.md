@@ -1,6 +1,6 @@
 # 📈 TradeDesk — Simulateur de Place Boursière (Projet Informatique L1)
 
-TradeDesk est une plateforme complète de **paper trading quantitatif**, d'analyse de marché en temps réel, de backtesting de stratégies et de pricing d'options. 
+TradeDesk est une plateforme complète de **paper trading quantitatif**, d'analyse de marché en temps réel, de backtesting de stratégies algorithmiques et de pricing d'options.
 
 Inspiré de l'architecture moderne de traitement de données et doté d'une interface premium au style Revolut, ce projet a été développé pour le cours d'Informatique L1 de l'Université Paris Nanterre.
 
@@ -8,7 +8,7 @@ Inspiré de l'architecture moderne de traitement de données et doté d'une inte
 
 ## 🛠️ Terminal de Lancement Unique
 
-TradeDesk intègre un **unique terminal de lancement interactif** qui regroupe toutes les fonctionnalités de contrôle. Il permet d'installer les bibliothèques, de récupérer les données de marché et de lancer le site web depuis un menu simple.
+TradeDesk intègre un **unique terminal de lancement interactif** qui regroupe toutes les fonctionnalités de contrôle.
 
 ### Comment l'utiliser ?
 
@@ -22,18 +22,16 @@ TradeDesk intègre un **unique terminal de lancement interactif** qui regroupe t
     ```
 
 ### Fonctionnalités du Terminal de Lancement :
-Une fois lancé, le terminal affiche un menu interactif :
 1.  **Lancer le Site Web (Streamlit)** : Démarre l'application Streamlit.
-2.  **Récupérer / Mettre à jour les données (yfinance SQL)** : Télécharge et met à jour l'ensemble des 1000 actifs dans la base de données SQLite (pipeline multi-threadé).
-3.  **Installer les bibliothèques / Dépendances** : Initialise l'environnement virtuel `.venv` et installe automatiquement les dépendances du fichier `requirements.txt`.
-4.  **Lancer la suite de tests unitaires** : Exécute les 24 tests unitaires pour valider le bon fonctionnement de l'application.
-
+2.  **Récupérer / Mettre à jour les données (yfinance SQL)** : Télécharge les données dans PostgreSQL (pipeline multi-threadé).
+3.  **Installer les bibliothèques / Dépendances** : Initialise `.venv` et installe les dépendances.
+4.  **Lancer la suite de tests unitaires** : Exécute les tests unitaires.
 
 ---
 
 ## 🏗️ Architecture & Pipeline de Données (Medallion SQL)
 
-Le projet implémente un pipeline de données de type **médaillon (Bronze, Silver, Gold)** stocké sous 4 bases SQLite séparées, assurant une ségrégation propre des étapes de transformation :
+Le projet implémente un pipeline **médaillon (Bronze → Silver → Gold)** stocké dans PostgreSQL Cloud (Supabase) :
 
 ```
     yfinance API
@@ -44,26 +42,57 @@ Le projet implémente un pipeline de données de type **médaillon (Bronze, Silv
  │   (Données   │     │ (Nettoyage & │     │   (KPIs :    │
  │   Brutes)    │     │  Indicateurs)│     │ Sharpe/Bêta) │
  └──────────────┘     └──────────────┘     └──────────────┘
- data/bronze/         data/silver/         data/gold/
- bronze.db            silver.db            gold.db
 
-                      + Portfolio DB : data/portfolio/portfolio.db
+                      + Portfolio DB : tables users, positions, transactions
 ```
 
-### Couches de Stockage SQL
+### Couches de Stockage SQL (PostgreSQL Cloud)
 
-| Couche | Base de Données | Rôle / Contenu | Méthode d'accès |
-| :--- | :--- | :--- | :--- |
-| **Bronze** | `data/bronze/bronze.db` | Données brutes OHLCV issues de `yfinance` | `get_bronze_connection()` |
-| **Silver** | `data/silver/silver.db` | Rendements journaliers, SMA20, SMA50, RSI14 | `get_silver_connection()` |
-| **Gold** | `data/gold/gold.db` | Indicateurs de performance (Sharpe, Bêta, Volatilité) | `get_gold_connection()` |
-| **Portfolio**| `data/portfolio/portfolio.db`| Comptes utilisateurs, liquidités, transactions, positions | `get_portfolio_connection()` |
+| Table | Rôle / Contenu |
+| :--- | :--- |
+| `bronze_prices` | Données brutes OHLCV issues de `yfinance` |
+| `silver_prices` | Rendements journaliers, SMA20, SMA50, RSI14 |
+| `gold_kpis` | Indicateurs de performance (Sharpe, Bêta, Volatilité) |
+| `users` | Comptes utilisateurs (`username`, `password_hash`, `email`, `created_at`) |
+| `portfolio_state` | Liquidités et capital initial par utilisateur |
+| `portfolio_positions` | Positions ouvertes (actif, quantité, prix moyen) |
+| `portfolio_transactions` | Historique complet des ordres passés |
 
 ---
 
-## 🚀 Démarrage Manuel Rapide (Alternative)
+## 🔐 Sécurité — Authentification & Gestion des Mots de Passe
 
-Si vous préférez ne pas utiliser les exécuteurs automatisés, vous pouvez effectuer les étapes manuellement :
+TradeDesk utilise un système d'authentification **sans dépendances externes**, basé sur la bibliothèque standard Python :
+
+### Hachage PBKDF2-HMAC-SHA256
+
+```
+Mot de passe brut ──► PBKDF2(password, sel_16_octets, 100_000_iterations, SHA-256)
+                  ──► Stockage : "sel_hex:hash_hex"
+```
+
+- ✅ **Sel unique** par utilisateur (16 octets aléatoires via `os.urandom`) → même mot de passe = hashes différents
+- ✅ **100 000 itérations** → attaque par force brute rendue computationnellement très coûteuse
+- ✅ **`hmac.compare_digest()`** → protection contre les timing attacks (temps de comparaison constant)
+- ✅ **Aucun mot de passe en clair** ne transite ni n'est stocké
+
+### Récupération de mot de passe oublié
+
+La récupération automatique par e-mail nécessite un serveur SMTP. En l'absence de serveur configuré, la procédure manuelle est :
+
+```bash
+# Générer un nouveau hash pour un mot de passe de remplacement
+python3 -c "from data.security import hash_password; print(hash_password('nouveau_mdp'))"
+```
+
+Puis en base PostgreSQL :
+```sql
+UPDATE users SET password_hash = '<hash_ci_dessus>' WHERE username = 'nom_utilisateur';
+```
+
+---
+
+## 🚀 Démarrage Manuel Rapide
 
 1. **Créer l'environnement virtuel et installer les packages** :
    ```bash
@@ -72,18 +101,27 @@ Si vous préférez ne pas utiliser les exécuteurs automatisés, vous pouvez eff
    pip install -r requirements.txt
    ```
 
-2. **Remplir les bases de données (première utilisation)** :
+2. **Configurer les secrets Supabase** (créer `.streamlit/secrets.toml`) :
+   ```toml
+   [postgres]
+   DB_USER     = "postgres"
+   DB_PASSWORD = "votre_mot_de_passe_supabase"
+   DB_HOST     = "votre_host.supabase.co"
+   DB_PORT     = "5432"
+   DB_NAME     = "postgres"
+   ```
+
+3. **Remplir les bases de données (première utilisation)** :
    ```bash
    ./.venv/bin/python3 populate_db.py
    ```
-   *Note : Le traitement de ~1000 actifs prend environ 2 à 5 minutes via l'exécuteur multi-threadé.*
 
-3. **Lancer le serveur de développement Streamlit** :
+4. **Lancer le serveur de développement Streamlit** :
    ```bash
-   ./.venv/bin/streamlit run website/web.py
+   ./.venv/bin/streamlit run website/TradeDesk.py
    ```
 
-4. **Lancer la suite de tests unitaires** :
+5. **Lancer la suite de tests unitaires** :
    ```bash
    ./.venv/bin/python3 run_tests.py
    ```
@@ -94,23 +132,30 @@ Si vous préférez ne pas utiliser les exécuteurs automatisés, vous pouvez eff
 
 ```
 📁 Projet-Informatique-L1/
-├── 📁 .streamlit/          → Configuration du thème sombre Streamlit
-├── 📁 bot/                 → Robot de trading automatisé (SMA / RSI / Random Forest)
-├── 📁 data/                → Gestion des bases SQLite et pipeline Medallion multi-threadé
-│   ├── bronze/             → Données brutes (bronze.db)
-│   ├── silver/             → Indicateurs techniques (silver.db)
-│   ├── gold/               → Indicateurs quantitatifs (gold.db)
-│   └── portfolio/          → Portefeuilles et utilisateurs (portfolio.db)
+├── 📁 .streamlit/          → Configuration du thème sombre + secrets.toml (ignoré par Git)
+├── 📁 bot/                 → Robot de trading (SMA / RSI / VWAP / Random Forest + Grid Search)
+├── 📁 data/                → Pipeline Medallion, PostgreSQL, sécurité (PBKDF2)
+│   ├── database.py         → Connexions psycopg2 + initialisation des tables
+│   ├── security.py         → Hachage PBKDF2-HMAC-SHA256 + vérification hmac.compare_digest
+│   ├── data.py             → Extraction yfinance + cache Streamlit
+│   └── medallion.py        → Pipeline Bronze → Silver → Gold
 ├── 📁 equities/            → Gestion du portefeuille utilisateur (Achat/Vente, PAMP)
-├── 📁 finance/             → Moteur de calcul financier (frais 1%, ROI, option de liaison C++)
-├── 📁 greeks/              → Formules de Black-Scholes et calcul des Grecs (Delta, Gamma, Vega, Theta, Rho)
-├── 📁 simulation/          → Moteur de simulation historique et backtesting (SMA/RSI)
-├── 📁 tests/               → Ensemble des 24 tests unitaires
-├── 📁 visualisation/       → Gestion de l'affichage des graphiques dynamiques (Plotly)
-├── 📁 website/             → Pages Streamlit du site
-│   ├── web.py              → Point d'entrée principal (authentification & routeur)
-│   └── 📁 pages/           → Pages secondaires (Marché, Portefeuille, Backtesting, Bot, Options 3D)
-├── requirements.txt        → Liste complète des dépendances Python
+├── 📁 finance/             → Moteur C++ (engine.cpp) via ctypes : frais, ROI, Black-Scholes, Grid Search
+├── 📁 greeks/              → Formules de Black-Scholes et Grecs (Delta, Gamma, Vega, Theta, Rho)
+├── 📁 simulation/          → Backtesting SMA / RSI / VWAP + Monte-Carlo (GBM)
+├── 📁 tests/               → Suite de tests unitaires
+├── 📁 visualisation/       → Graphiques Plotly (Candlestick, VWAP RT, Bollinger, Heatmap, 3D...)
+├── 📁 website/             → Application Streamlit
+│   ├── TradeDesk.py        → Point d'entrée (authentification & page d'accueil)
+│   └── 📁 pages/
+│       ├── 1_Marché.py     → Cours temps réel, chandeliers, statistiques, corrélation
+│       ├── 2_Portefeuille.py → Ordres, positions, options, historique
+│       ├── 3_Backtesting.py → Simulation SMA / RSI / VWAP + comparatif
+│       ├── 4_Bot.py        → Bot algorithmique (SMA/RSI/VWAP/ML avec Grid Search C++)
+│       ├── 5_Options.py    → Pricing Black-Scholes + surface 3D
+│       ├── 6_Documentation.py → Mode d'emploi + explication des graphiques + cours finance
+│       └── 7_Paramètres.py → Gestion du compte (MDP, email, suppression)
+├── requirements.txt        → Dépendances Python
 ├── populate_db.py          → Script d'alimentation des BDD
 └── run_tests.py            → Exécuteur de la suite de tests
 ```
@@ -119,51 +164,81 @@ Si vous préférez ne pas utiliser les exécuteurs automatisés, vous pouvez eff
 
 ## 📊 Fonctionnalités Détaillées
 
-### 1. Page Marché (`1_📊_Marché.py`)
-- **Temps Réel** : Données intraday à intervalle 1 minute, calcul du VWAP, jauge RSI en direct et suivi des métriques journalières.
-- **Historique** : Graphique de chandeliers interactifs, bandes de Bollinger, moyennes mobiles (SMA20/50), volume et RSI.
-- **Statistiques** : Mesure de la volatilité annualisée, calcul du Ratio de Sharpe, du Bêta de marché, de la Skewness et de la Kurtosis.
-- **Rendements** : Analyse de la distribution des rendements quotidiens avec comparaison par rapport à une loi normale.
-- **Corrélation** : Carte thermique de corrélation de Pearson entre plusieurs actifs sur une période de 1 an.
+### 1. Page Marché (`1_Marché.py`)
+- **Temps Réel** : Données intraday 1 min, VWAP, jauge RSI (avec protection NaN), métriques journalières.
+- **Historique** : Chandeliers japonais, Bandes de Bollinger (SMA20 ±2σ), SMA20/50, volume coloré, RSI(14).
+- **Volatilité & Volume** : Volatilité glissante annualisée, détection des anomalies de volume (> 2× MM).
+- **Statistiques** : Volatilité, Ratio de Sharpe, Bêta (vs S&P 500), Rendement 1 an, Skewness, Kurtosis.
+- **Rendements** : Distribution empirique vs loi normale avec marqueurs μ et ±1σ.
+- **Corrélation** : Heatmap Pearson entre plusieurs actifs (avec correction des fuseaux horaires).
 
-### 2. Page Portefeuille (`2_💼_Portefeuille.py`)
-- Passage d'ordres d'achat/vente au marché avec simulation de frais de commission de 1%.
-- Affichage en temps réel des positions ouvertes, du prix moyen pondéré (PAMP) et du PnL latent coloré.
-- Graphique en camembert interactif montrant l'allocation des actifs.
-- Exportation de l'historique complet des transactions en format CSV.
+### 2. Page Portefeuille (`2_Portefeuille.py`)
+- Ordres achat/vente sur Actions/ETFs et Options européennes (Call/Put) pricées avec Black-Scholes.
+- Suivi des positions ouvertes avec PnL latent coloré et ROI en temps réel.
+- Graphique camembert de l'allocation du portefeuille.
+- Export CSV de l'historique des transactions.
 
-### 3. Page Backtesting (`3_🔬_Backtesting.py`)
-- Testez la pertinence de vos stratégies sur l'historique de n'importe quel actif.
-- Stratégies incluses : **Moyennes Mobiles (SMA)** (croisement) et **RSI** (zones de surachat/survente).
-- Visualisation interactive du solde historique, comparaison avec la stratégie Buy & Hold et calcul du Drawdown maximum.
+### 3. Page Backtesting (`3_Backtesting.py`)
+- Stratégies : **SMA** (croisement), **RSI** (surachat/survente), **VWAP** (prix moyen pondéré).
+- Mode **Comparatif** : SMA vs RSI vs VWAP sur la même période sur un seul graphique.
+- Métriques : Rendement, Alpha vs Buy & Hold, Max Drawdown, Commissions payées.
+- Graphique des signaux d'achat/vente avec la courbe VWAP superposée.
 
-### 4. Page Options 3D (`5_📐_Options_3D.py`)
-- Pricing d'options européennes (Call/Put) avec le modèle de Black-Scholes.
-- Modélisation en 3D interactif du prix de l'option en fonction du sous-jacent et du temps restant (maturité).
-- Visualisation de la courbe de volatilité (Volatility Smile).
-- Calcul et tracé dynamique des Grecs ($\Delta$, $\Gamma$, $\nu$, $\Theta$) pour piloter le risque de l'option.
+### 4. Page Bot de Trading (`4_Bot.py`)
+- **4 stratégies** : SMA, RSI, VWAP, Machine Learning (Random Forest).
+- Le mode **ML** utilise le **Grid Search C++** (`finance/engine.cpp`) pour trouver les fenêtres SMA et RSI optimales avant de construire les features du modèle.
+- Calibration Platt Scaling + Cross-Validation 5-Folds pour éviter l'overfitting.
+- Rapport narratif complet avant autorisation d'ordre.
 
-### 5. Page Robot de Trading (`4_🤖_Bot.py`)
-- Laissez un automate prendre des décisions d'achat et de vente.
-- Trois modes décisionnels disponibles : signaux de croisement SMA, niveaux de RSI, ou prévisions d'un classifieur Machine Learning Random Forest (`scikit-learn`).
+### 5. Page Options 3D (`5_Options.py`)
+- Pricing Call/Put avec Black-Scholes (moteur C++ + fallback Python).
+- Surface 3D interactive Prix = f(Strike, Maturité).
+- Grecs dynamiques (Δ, Γ, ν, Θ, Ρ).
+
+### 6. Page Documentation (`6_Documentation.py`)
+- Mode d'emploi complet avec tableau des sous-onglets.
+- **Explication détaillée de chaque graphique** : Candlestick, VWAP RT, Distribution, Volatilité, Volume Breakout, Corrélation, Equity Curve/Drawdown, Surface 3D.
+- Formules et tables d'interprétation pour SMA, RSI, VWAP, ML, Bollinger, Sharpe.
+- Cours de finance accéléré (Actions, Risque, ETF, Options, Analyse technique/fondamentale).
+
+### 7. Page Paramètres (`7_Paramètres.py`) — **Nouveau**
+- **Modifier le mot de passe** (avec vérification de l'ancien).
+- **Ajouter/modifier l'e-mail** (migration automatique de la colonne DB).
+- **Procédure de mot de passe oublié** documentée.
+- **Informations de sécurité** : architecture PBKDF2, structure des tables, secrets Streamlit.
+- **Supprimer le compte** avec double confirmation (username + mot de passe + checkbox).
+
+---
+
+## 🔧 Moteur C++ (Grid Search & Black-Scholes)
+
+Le module `finance/engine.cpp` est compilé automatiquement en bibliothèque partagée (`.so`/`.dll`) via `g++` ou `clang++`. Il expose via `ctypes` :
+
+| Fonction C++ | Rôle |
+|---|---|
+| `grid_search_sma_cpp` | Teste toutes les combinaisons de fenêtres SMA pour trouver les plus rentables |
+| `grid_search_rsi_cpp` | Optimise la fenêtre RSI et les seuils surachat/survente |
+| `black_scholes_pricing_cpp` | Pricing d'options Call/Put (modèle de Black-Scholes 1973) |
+| `total_brut`, `total_net_achat/vente` | Calcul des coûts de transaction avec commission 1% |
+
+Un **fallback Python pur** prend le relais automatiquement si le compilateur C++ est absent.
 
 ---
 
 ## 🧪 Suite de Tests (100% de réussite ✅)
 
-Le projet contient **24 tests unitaires** couvrant l'ensemble de la logique métier et garantissant la robustesse de l'application :
-
 ```
-Finance (C++ / Python) : Calcul des commissions, ROI, total net   — 5 tests
-Greeks & Math         : Modèle de Black-Scholes, Sharpe, Volatilité — 5 tests
-Pipeline Medallion    : Flux de données Bronze -> Silver -> Gold    — 1 test
+Finance (C++ / Python) : Calcul des commissions, ROI, total net    — 5 tests
+Greeks & Math          : Black-Scholes, Sharpe, Volatilité          — 5 tests
+Pipeline Medallion     : Flux Bronze → Silver → Gold                — 1 test
 Gestion de Portefeuille: Passages d'ordres, PAMP, persistance SQLite — 8 tests
-Simulation & Backtest : Stratégies de croisement SMA, RSI         — 5 tests
+Simulation & Backtest  : Stratégies SMA, RSI, VWAP                  — 5 tests
 ```
 
 Pour exécuter les tests :
-- Depuis le centre de contrôle : Option `[4]` de `launch.sh` ou `Lancer_TradeDesk.bat`.
-- Directement en ligne de commande : `./.venv/bin/python3 run_tests.py`
+```bash
+./.venv/bin/python3 run_tests.py
+```
 
 ---
 

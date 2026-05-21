@@ -1,18 +1,21 @@
 """
-bot.py — Moteur du robot de trading automatique (SMA, RSI et Machine Learning)
-=============================================================================
+bot.py — Moteur du robot de trading automatique (SMA, RSI, VWAP et Machine Learning)
+=====================================================================================
 
 Ce module définit la classe TradingBot qui exécute périodiquement des algorithmes
 de trading automatique sur le portefeuille de l'utilisateur connecté.
-Il intègre désormais une stratégie prédictive basée sur le Machine Learning
-(Random Forest Classifier de scikit-learn).
+Il intègre 4 stratégies :
+  1. SMA  : Croisement de Moyennes Mobiles (trend following classique).
+  2. RSI  : Oscillateur surachat/survente (mean reversion).
+  3. VWAP : Prix Moyen Pondéré par Volume (référence institutionnelle).
+  4. ML_RF: Random Forest Classifier avec Grid Search C++ pour l'optimisation.
 
 Relations avec les autres modules :
 ----------------------------------
-- data.data : Récupère les historiques de prix nécessaires pour entraîner les modèles.
-- simulation.simulation : Calcule les indicateurs techniques standards (RSI, SMA).
-- equities.equities : Exécute les ordres d'achat/vente sur le portefeuille en base de données.
-- 4_🤖_Bot.py : Contrôle l'état du bot et affiche la console de logs dans Streamlit.
+- data.data         : Récupère les historiques de prix depuis Yahoo Finance.
+- simulation.simulation : Calcule les indicateurs techniques (RSI, SMA).
+- equities.equities : Exécute les ordres d'achat/vente sur le portefeuille.
+- 4_🤖_Bot.py       : Contrôle l'état du bot dans l'interface Streamlit.
 """
 
 import time
@@ -26,7 +29,7 @@ import simulation.simulation as sim
 class TradingBot:
     def __init__(self, portfolio: Portfolio, strategy: str = "SMA"):
         self.portfolio = portfolio
-        self.strategy = strategy
+        self.strategy = strategy  # "SMA", "RSI", "VWAP" ou "ML_RF"
         self.is_running = False
         self.logs = []
 
@@ -96,6 +99,47 @@ class TradingBot:
                     signal = 1
                 elif rsi_val > 65:
                     signal = -1
+
+            elif self.strategy == "VWAP":
+                # =====================================================================
+                # STRATÉGIE VWAP (Volume Weighted Average Price / Prix Moyen Pondéré)
+                # =====================================================================
+                # Le VWAP est LA référence d'exécution des traders institutionnels.
+                # Il représente le prix moyen auquel un actif a été échangé sur une
+                # période, pondéré par le volume de chaque transaction.
+                #
+                # Formule : VWAP = Σ(Prix_Typique × Volume) / Σ(Volume)
+                # avec Prix_Typique = (High + Low + Close) / 3
+                #
+                # Le principe de décision (Signaux de trading) :
+                # - Signal d'ACHAT (1) : Si le cours est SOUS le VWAP de plus de 2%.
+                #   L'actif est sous-évalué par rapport au prix moyen de consensus.
+                #   Les acheteurs institutionnels utilisent ce signal pour rentrer.
+                # - Signal de VENTE (-1) : Si le cours est AU-DESSUS du VWAP de plus de 2%.
+                #   L'actif est surévalué. C'est le moment de prendre ses bénéfices.
+                # - NEUTRE (0) : Si le cours est dans la bande ±2% autour du VWAP.
+                #   Le prix est équitable, aucun avantage statistique à agir.
+                # =====================================================================
+                window_vwap = 20  # Fenêtre glissante de 20 jours
+                if "High" in df.columns and "Low" in df.columns and "Volume" in df.columns:
+                    typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
+                    cum_tp_vol = (typical_price * df["Volume"]).rolling(window_vwap).sum()
+                    cum_vol    = df["Volume"].rolling(window_vwap).sum()
+                    vwap_series = cum_tp_vol / cum_vol
+                    vwap_val    = vwap_series.iloc[-1]
+                else:
+                    # Fallback : pas de données de volume, on utilise la SMA20
+                    vwap_val = sim.calculate_sma(close_prices, window_vwap).iloc[-1]
+                
+                deviation_pct = ((current_price - vwap_val) / vwap_val) * 100
+                self.log(f"VWAP(20j): {vwap_val:.2f} | Cours: {current_price:.2f} | Écart: {deviation_pct:+.2f}%")
+                
+                if current_price < vwap_val * 0.98:   # Cours > 2% sous le VWAP
+                    signal = 1
+                elif current_price > vwap_val * 1.02:  # Cours > 2% au-dessus du VWAP
+                    signal = -1
+                else:
+                    signal = 0
                     
             elif self.strategy == "ML_RF":
                 # =====================================================================
@@ -138,33 +182,65 @@ class TradingBot:
                 returns_3d = close_ml.pct_change(3)
                 returns_5d = close_ml.pct_change(5)
                 
-                import finance.finance as fin
-                
-                # Exécution du Grid Search C++ pour trouver les hyperparamètres optimaux
-                self.log("Exécution Grid Search C++ pour optmiser les paramètres des indicateurs...")
+                # ── Grid Search C++ : SMA & RSI ─────────────────────────────────────────────
                 prices_list = close_ml.tolist()
                 best_short, best_long, ret_sma = fin.grid_search_sma(prices_list)
                 best_rsi_w, best_os, best_ob, ret_rsi = fin.grid_search_rsi(prices_list)
-                
-                self.log(f"Optimum trouvé -> SMA: {best_short}/{best_long} | RSI: {best_rsi_w} (S: {best_os}, A: {best_ob})")
-                
-                # Moyennes mobiles optimisées
+                self.log(f"SMA opt: {best_short}/{best_long} | RSI opt: w={best_rsi_w} (S:{best_os}, A:{best_ob})")
+
+                # ── Grid Search Python : Fenêtre VWAP optimale ────────────────────────
+                # Cherche la fenêtre VWAP (5←60j) maximisant la corrélation de Pearson
+                # entre la distance relative au VWAP et le rendement futur à 3 jours.
+                best_vwap_w    = 20
+                best_vwap_corr = -1.0
+                future_ret3    = close_ml.pct_change(3).shift(-3)
+                import numpy as np
+                for vw in range(5, 61, 5):
+                    try:
+                        if "High" in df_ml.columns and "Volume" in df_ml.columns:
+                            tp_c = (df_ml["High"] + df_ml["Low"] + df_ml["Close"]) / 3
+                            vwap_c = (
+                                (tp_c * df_ml["Volume"]).rolling(vw).sum()
+                                / df_ml["Volume"].rolling(vw).sum()
+                            )
+                        else:
+                            vwap_c = close_ml.rolling(vw).mean()
+                        dist_c = ((close_ml - vwap_c) / vwap_c).dropna()
+                        corr   = abs(float(dist_c.corr(future_ret3)))
+                        if corr > best_vwap_corr and not np.isnan(corr):
+                            best_vwap_corr = corr
+                            best_vwap_w    = vw
+                    except Exception:
+                        continue
+                self.log(f"VWAP opt: fenêtre={best_vwap_w}j (corr Pearson={best_vwap_corr:.3f})")
+
+                # ── Feature Engineering (7 features) ─────────────────────────────────
                 sma_short_opt = sim.calculate_sma(close_ml, best_short)
-                sma_long_opt = sim.calculate_sma(close_ml, best_long)
-                sma_ratio = sma_short_opt / sma_long_opt
-                
-                # Indicateurs RSI et Volatilité optimisés
-                rsi_opt = sim.calculate_rsi(close_ml, best_rsi_w)
-                vol_10 = returns_1d.rolling(10).std()
-                
-                # Construction de la matrice de features X
+                sma_long_opt  = sim.calculate_sma(close_ml, best_long)
+                sma_ratio     = sma_short_opt / sma_long_opt
+                rsi_opt       = sim.calculate_rsi(close_ml, best_rsi_w)
+                vol_10        = returns_1d.rolling(10).std()
+
+                # Distance relative au VWAP optimal
+                if "High" in df_ml.columns and "Volume" in df_ml.columns:
+                    tp_opt   = (df_ml["High"] + df_ml["Low"] + df_ml["Close"]) / 3
+                    vwap_opt = (
+                        (tp_opt * df_ml["Volume"]).rolling(best_vwap_w).sum()
+                        / df_ml["Volume"].rolling(best_vwap_w).sum()
+                    )
+                else:
+                    vwap_opt = close_ml.rolling(best_vwap_w).mean()
+                vwap_dist = (close_ml - vwap_opt) / vwap_opt
+
+                # Construction de la matrice de features X (7 features)
                 features = pd.DataFrame({
-                    "ret1": returns_1d,
-                    "ret3": returns_3d,
-                    "ret5": returns_5d,
+                    "ret1":      returns_1d,
+                    "ret3":      returns_3d,
+                    "ret5":      returns_5d,
                     "sma_ratio": sma_ratio,
-                    "rsi": rsi_opt,
-                    "vol10": vol_10
+                    "rsi":       rsi_opt,
+                    "vwap_dist": vwap_dist,  # ← feature VWAP optimisée
+                    "vol10":     vol_10,
                 })
                 
                 # Target : est-ce que le cours est supérieur dans 3 jours (Horizon de 3 jours) ?

@@ -15,11 +15,18 @@ def calculate_rsi(prices: pd.Series, window: int = 14) -> pd.Series:
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-def backtest_strategy(prices: pd.Series, strategy_type: str = "SMA", params: dict = None) -> dict:
+def backtest_strategy(prices: pd.Series, strategy_type: str = "SMA", params: dict = None, df_ohlcv: pd.DataFrame = None) -> dict:
     """
     Simule un backtesting historique d'une stratégie sur une série temporelle de prix.
-    Initial cash: 10,000 EUR
-    Commission: 1% par transaction (achat/vente)
+
+    Paramètres
+    ----------
+    prices       : Série temporelle des prix de clôture (Close).
+    strategy_type: "SMA", "RSI" ou "VWAP".
+    params       : Dictionnaire de paramètres spécifiques à la stratégie.
+    df_ohlcv     : DataFrame OHLCV complet (requis pour la stratégie VWAP).
+
+    Capital initial : 10 000 € | Commission : 1% par transaction.
     """
     if len(prices) < 20:
         return {"error": "Pas assez de données pour le backtest (minimum 20 points de données requis)."}
@@ -57,6 +64,37 @@ def backtest_strategy(prices: pd.Series, strategy_type: str = "SMA", params: dic
         signals[rsi < oversold] = 1
         # Vente quand RSI monte au-dessus du seuil de surachat
         signals[rsi > overbought] = -1
+
+    elif strategy_type == "VWAP":
+        # =====================================================================
+        # STRATÉGIE VWAP en backtesting
+        # =====================================================================
+        # On calcule un VWAP glissant sur une fenêtre paramétrable (défaut 20 jours).
+        # Achat si le cours est > 1.5% sous le VWAP, vente si > 1.5% au-dessus.
+        # =====================================================================
+        vwap_window = params.get("vwap_window", 20) if params else 20
+        threshold   = params.get("threshold", 1.5) if params else 1.5  # en %
+
+        if df_ohlcv is not None and "High" in df_ohlcv.columns and "Volume" in df_ohlcv.columns:
+            typical_price = (df_ohlcv["High"] + df_ohlcv["Low"] + df_ohlcv["Close"]) / 3
+            cum_tp_vol = (typical_price * df_ohlcv["Volume"]).rolling(vwap_window).sum()
+            cum_vol    = df_ohlcv["Volume"].rolling(vwap_window).sum()
+            vwap       = cum_tp_vol / cum_vol
+        else:
+            # Fallback : VWAP approximé par la SMA(vwap_window) si pas de données OHLCV
+            vwap = calculate_sma(prices, vwap_window)
+
+        signals = np.zeros(len(prices))
+        lower_band = vwap * (1 - threshold / 100)
+        upper_band = vwap * (1 + threshold / 100)
+
+        for i in range(len(prices)):
+            if pd.isna(vwap.iloc[i]):
+                continue
+            if prices.iloc[i] < lower_band.iloc[i]:
+                signals[i] = 1   # Sous-évalué : achat
+            elif prices.iloc[i] > upper_band.iloc[i]:
+                signals[i] = -1  # Surévalué : vente
     else:
         # Par défaut : Buy & Hold
         signals = np.ones(len(prices))

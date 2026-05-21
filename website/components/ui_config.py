@@ -22,9 +22,59 @@ def set_global_ui():
       }
       [data-testid="stSidebar"] * { font-family: 'Inter', sans-serif !important; }
 
-      /* Cacher les flèches de défilement des onglets et la flèche de fermeture de sidebar */
+      /* Cacher uniquement les flèches de défilement des onglets (pas le toggle sidebar) */
       [data-testid="stTabs"] [data-testid="stIconMaterial"] { display: none !important; }
-      [data-testid="collapsedControl"] { display: none !important; }
+
+      /* ── Bouton toggle sidebar (hamburger) — toujours visible, surtout sur mobile ── */
+      [data-testid="collapsedControl"] {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 9999 !important;
+        background: linear-gradient(135deg, #00A8E8, #007EA7) !important;
+        border-radius: 10px !important;
+        width: 40px !important;
+        height: 40px !important;
+        box-shadow: 0 4px 14px rgba(0,168,232,0.4) !important;
+        cursor: pointer !important;
+        transition: opacity 0.2s, transform 0.15s !important;
+      }
+      [data-testid="collapsedControl"]:hover {
+        opacity: 0.88 !important;
+        transform: scale(1.06) !important;
+      }
+      [data-testid="collapsedControl"] svg {
+        fill: white !important;
+        width: 20px !important;
+        height: 20px !important;
+      }
+
+      /* ── Sidebar responsive : plein écran sur mobile ── */
+      @media (max-width: 768px) {
+        [data-testid="stSidebar"] {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          height: 100dvh !important;
+          width: 85vw !important;
+          max-width: 320px !important;
+          z-index: 9998 !important;
+          overflow-y: auto !important;
+          box-shadow: 4px 0 24px rgba(0,0,0,0.5) !important;
+        }
+        /* Petit padding en haut pour ne pas couvrir le bouton toggle */
+        [data-testid="stSidebar"] > div:first-child {
+          padding-top: 56px !important;
+        }
+        /* Zone de contenu principal : pleine largeur sur mobile */
+        [data-testid="stAppViewContainer"] > section:nth-child(2) {
+          padding-left: 8px !important;
+          padding-right: 8px !important;
+        }
+      }
 
       /* Titres */
       h1, h2, h3, h4 { color: #FFFFFF !important; font-weight: 700 !important; }

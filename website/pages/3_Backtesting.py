@@ -29,11 +29,18 @@ col1, col2, col3 = st.columns([2, 1.5, 1.5])
 with col1:
     asset = st.selectbox("Actif à tester", list(data_mod.MARKET.keys()))
 with col2:
-    strat = st.selectbox("Stratégie", ["SMA (Moyennes Mobiles)", "RSI (Force Relative)", "Comparatif (SMA vs RSI)"])
+    strat = st.selectbox("Stratégie", [
+        "SMA (Moyennes Mobiles)",
+        "RSI (Force Relative)",
+        "VWAP (Prix Moyen Pondéré)",
+        "Comparatif (SMA vs RSI vs VWAP)",
+    ])
 with col3:
     period_bt = st.selectbox("Période", ["6mo","1y","2y","5y","max"], index=1)
 
-strat_key = "SMA" if "SMA" in strat else ("CMP" if "Comparatif" in strat else "RSI")
+strat_key = "SMA" if "SMA" in strat and "Comparatif" not in strat else (
+    "RSI" if "RSI" in strat and "Comparatif" not in strat else (
+    "VWAP" if "VWAP" in strat and "Comparatif" not in strat else "CMP"))
 
 # ── Paramètres de la stratégie ────────────────────────────────────────────────
 capital_init = st.number_input("Capital initial (€)", 1000, 100000, 10000, step=500, key="capital_init_bt")
@@ -52,8 +59,16 @@ elif strat_key == "RSI":
         params["oversold"]    = st.slider("Seuil survente (achat)", 10, 45, 30)
     with col_p3:
         params["overbought"]  = st.slider("Seuil surachat (vente)", 55, 90, 70)
+elif strat_key == "VWAP":
+    with col_p1:
+        params["vwap_window"] = st.slider("Fenêtre VWAP (jours)", 5, 60, 20)
+    with col_p2:
+        params["threshold"]   = st.slider("Seuil d'écart (%)", 0.5, 5.0, 1.5, step=0.5,
+                                           help="Écart minimum au VWAP pour déclencher un signal (achat si < -seuil%, vente si > +seuil%)")
 else:  # Comparatif
-    st.info("Mode Comparatif : SMA(20/50) vs RSI(14/30/70) lancés simultanément sur la même période.")
+    st.info("Mode Comparatif : SMA(20/50) vs RSI(14/30/70) vs VWAP(20j/1.5%) lancés simultanément sur la même période.")
+
+params["initial_cash"] = capital_init
 
 st.divider()
 run_bt = st.button("▶️ Lancer le Backtest", type="primary", use_container_width=False)
@@ -64,32 +79,39 @@ if run_bt:
             df_bt   = data_mod.recuperer_historique(asset, period_bt, "1d")
             prices  = df_bt["Close"]
 
-            if "Comparatif" in strat:
-                # Execution de SMA
+            if strat_key == "CMP":
+                # Exécution SMA
                 params_sma = {"short_window": 20, "long_window": 50, "initial_cash": capital_init}
                 res_sma = sim.backtest_strategy(prices, "SMA", params_sma)
-                # Execution de RSI
+                # Exécution RSI
                 params_rsi = {"rsi_window": 14, "oversold": 30, "overbought": 70, "initial_cash": capital_init}
                 res_rsi = sim.backtest_strategy(prices, "RSI", params_rsi)
-                
-                if "error" in res_sma or "error" in res_rsi:
+                # Exécution VWAP
+                params_vwap = {"vwap_window": 20, "threshold": 1.5, "initial_cash": capital_init}
+                res_vwap = sim.backtest_strategy(prices, "VWAP", params_vwap, df_ohlcv=df_bt)
+
+                if "error" in res_sma or "error" in res_rsi or "error" in res_vwap:
                     st.error("Erreur de simulation sur l'une des stratégies.")
                 else:
                     st.success("Comparatif généré avec succès !")
-                    c1, c2, c3 = st.columns(3)
+                    c1, c2, c3, c4 = st.columns(4)
                     c1.metric("Rendement Buy & Hold", f"{res_sma['benchmark_return']:.2f} %")
-                    c2.metric("Rendement SMA (20/50)", f"{res_sma['strategy_return']:.2f} %", delta=f"{res_sma['strategy_return'] - res_sma['benchmark_return']:+.2f} %")
-                    c3.metric("Rendement RSI (14/30/70)", f"{res_rsi['strategy_return']:.2f} %", delta=f"{res_rsi['strategy_return'] - res_rsi['benchmark_return']:+.2f} %")
-                    
+                    c2.metric("Rendement SMA (20/50)",    f"{res_sma['strategy_return']:.2f} %",  delta=f"{res_sma['strategy_return']  - res_sma['benchmark_return']:+.2f} %")
+                    c3.metric("Rendement RSI (14/30/70)", f"{res_rsi['strategy_return']:.2f} %",  delta=f"{res_rsi['strategy_return']  - res_rsi['benchmark_return']:+.2f} %")
+                    c4.metric("Rendement VWAP (20/1.5%)", f"{res_vwap['strategy_return']:.2f} %", delta=f"{res_vwap['strategy_return'] - res_vwap['benchmark_return']:+.2f} %")
+
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=res_sma["dates"], y=res_sma["equity_curve"], mode='lines', name='SMA', line=dict(color='#00A8E8')))
-                    fig.add_trace(go.Scatter(x=res_rsi["dates"], y=res_rsi["equity_curve"], mode='lines', name='RSI', line=dict(color='#7C3AED')))
-                    fig.add_trace(go.Scatter(x=res_sma["dates"], y=res_sma["benchmark_curve"], mode='lines', name='Buy & Hold', line=dict(color='#C0C0C0', dash='dash')))
-                    fig.update_layout(title="Comparaison des Capitaux (Equity Curves)", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    fig.add_trace(go.Scatter(x=res_sma["dates"],  y=res_sma["equity_curve"],      mode='lines', name='SMA',       line=dict(color='#00A8E8')))
+                    fig.add_trace(go.Scatter(x=res_rsi["dates"],  y=res_rsi["equity_curve"],      mode='lines', name='RSI',       line=dict(color='#7C3AED')))
+                    fig.add_trace(go.Scatter(x=res_vwap["dates"], y=res_vwap["equity_curve"],     mode='lines', name='VWAP',      line=dict(color='#F59E0B')))
+                    fig.add_trace(go.Scatter(x=res_sma["dates"],  y=res_sma["benchmark_curve"],   mode='lines', name='Buy & Hold',line=dict(color='#C0C0C0', dash='dash')))
+                    fig.update_layout(title="Comparaison des Capitaux (Equity Curves)", template="plotly_dark",
+                                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig, use_container_width=True)
 
             else:
-                res = sim.backtest_strategy(prices, strat_key, params)
+                df_ohlcv_arg = df_bt if strat_key == "VWAP" else None
+                res = sim.backtest_strategy(prices, strat_key, params, df_ohlcv=df_ohlcv_arg)
 
                 if "error" in res:
                     st.error(res["error"])
@@ -126,6 +148,20 @@ if run_bt:
                         fig_s.add_trace(go.Scatter(x=sells["date"], y=sells["price"],
                                                    mode="markers", marker=dict(color="#EF5350", size=10, symbol="triangle-down"),
                                                    name="Signal Vente"))
+
+                        # Pour VWAP, on affiche aussi la courbe VWAP sur le graphique des prix
+                        if strat_key == "VWAP" and len(df_bt) == len(df_sig):
+                            typical_price = (df_bt["High"] + df_bt["Low"] + df_bt["Close"]) / 3
+                            vwap_window   = params.get("vwap_window", 20)
+                            cum_tp_vol    = (typical_price * df_bt["Volume"]).rolling(vwap_window).sum()
+                            cum_vol       = df_bt["Volume"].rolling(vwap_window).sum()
+                            vwap_line     = cum_tp_vol / cum_vol
+                            fig_s.add_trace(go.Scatter(
+                                x=df_sig["date"], y=vwap_line.values,
+                                line=dict(color="#F59E0B", width=1.5, dash="dot"),
+                                name=f"VWAP ({vwap_window}j)"
+                            ))
+
                         fig_s.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                                             title=f"Signaux {strat_key} — {asset}", height=400)
                         st.plotly_chart(fig_s, use_container_width=True)
