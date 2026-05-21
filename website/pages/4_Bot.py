@@ -12,7 +12,6 @@ from sklearn.ensemble import RandomForestClassifier
 import data.data as data_mod
 import simulation.simulation as sim
 from equities.equities import Portfolio
-from data.database import PORTFOLIO_DB_PATH
 
 from website.components.assistant_sidebar import render_assistant
 from website.components.ui_config import set_global_ui
@@ -27,7 +26,7 @@ user_id = st.session_state.user_id
 
 def save():
     """Sauvegarde le portefeuille de l'utilisateur actuel dans SQLite."""
-    p.save_to_db(user_id, PORTFOLIO_DB_PATH)
+    p.save_to_db(user_id)
 
 def add_log(message: str):
     """Ajoute une entrée horodatée à la console de logs."""
