@@ -101,7 +101,7 @@ if not st.session_state.logged_in:
                     conn = get_portfolio_connection()
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT id, password_hash FROM users WHERE username = ?",
+                        "SELECT id, password_hash FROM users WHERE username = %s",
                         (username.strip().lower(),)
                     )
                     row = cursor.fetchone()
