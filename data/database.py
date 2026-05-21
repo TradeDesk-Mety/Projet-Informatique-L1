@@ -21,9 +21,13 @@ import streamlit as st
 
 def get_connection():
     """Retourne une connexion active à la base de données PostgreSQL Cloud via paramètres individuels."""
-    # Récupération des secrets individuels
+    # Récupération des secrets individuels depuis Streamlit Cloud
     pg_secrets = st.secrets.get("postgres", {})
     
+    # Sécurité au cas où les secrets seraient vides
+    if not pg_secrets:
+        raise ValueError("❌ Les secrets [postgres] sont introuvables ou vides dans Streamlit Cloud.")
+        
     return psycopg2.connect(
         user=pg_secrets.get("DB_USER", "postgres"),
         password=pg_secrets.get("DB_PASSWORD", ""),
