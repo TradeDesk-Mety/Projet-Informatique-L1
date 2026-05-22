@@ -1,4 +1,4 @@
-"""
+""
 bot.py — Moteur du robot de trading automatique (SMA, RSI, VWAP et Machine Learning)
 =====================================================================================
 
