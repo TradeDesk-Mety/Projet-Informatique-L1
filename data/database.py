@@ -117,33 +117,49 @@ def init_db():
     )
     """)
     
-    # 5. Table d'état du portefeuille liée à l'utilisateur
+    # 5. Table des portefeuilles (support multi-portefeuilles par utilisateur)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS portfolio_state (
-        user_id INTEGER PRIMARY KEY,
-        cash REAL NOT NULL,
-        initial_cash REAL NOT NULL,
+    CREATE TABLE IF NOT EXISTS portfolios (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        initial_cash REAL NOT NULL DEFAULT 10000.0,
+        created_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """)
-    
-    # 6. Table des positions du portefeuille liée à l'utilisateur
+
+    # 6. Table d'état du portefeuille liée à l'utilisateur ET au portefeuille
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS portfolio_state (
+        user_id INTEGER NOT NULL,
+        portfolio_id INTEGER NOT NULL DEFAULT 1,
+        cash REAL NOT NULL,
+        initial_cash REAL NOT NULL,
+        PRIMARY KEY (user_id, portfolio_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+
+    # 7. Table des positions du portefeuille liée à l'utilisateur ET au portefeuille
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolio_positions (
         user_id INTEGER NOT NULL,
+        portfolio_id INTEGER NOT NULL DEFAULT 1,
         asset TEXT NOT NULL,
         quantity INTEGER NOT NULL,
         avg_price REAL NOT NULL,
-        PRIMARY KEY (user_id, asset),
+        PRIMARY KEY (user_id, portfolio_id, asset),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """)
-    
-    # 7. Table des transactions du portefeuille liée à l'utilisateur
+
+    # 8. Table des transactions du portefeuille liée à l'utilisateur ET au portefeuille
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolio_transactions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL,
+        portfolio_id INTEGER NOT NULL DEFAULT 1,
         timestamp TEXT NOT NULL,
         type TEXT NOT NULL,
         asset TEXT NOT NULL,
@@ -154,10 +170,95 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """)
-    
+
+    # ── Migration rétrocompatible : ajout de portfolio_id si absent ──────────
+    for table, col_def in [
+        ("portfolio_state",        "portfolio_id INTEGER NOT NULL DEFAULT 1"),
+        ("portfolio_positions",    "portfolio_id INTEGER NOT NULL DEFAULT 1"),
+        ("portfolio_transactions", "portfolio_id INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            cursor.execute(
+                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_def}"
+            )
+        except Exception:
+            pass  # colonne déjà présente
+
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def create_portfolio(user_id: int, name: str, initial_cash: float = 10000.0) -> int:
+    """Crée un nouveau portefeuille pour un utilisateur et retourne son id."""
+    from datetime import datetime
+    conn = get_portfolio_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO portfolios (user_id, name, initial_cash, created_at) VALUES (%s, %s, %s, %s) RETURNING id",
+            (user_id, name, initial_cash, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        new_id = cursor.fetchone()[0]
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
+
+
+def get_portfolios(user_id: int) -> list:
+    """Retourne la liste des portefeuilles d'un utilisateur [(id, name, initial_cash, created_at)]."""
+    conn = get_portfolio_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name, initial_cash, created_at FROM portfolios WHERE user_id = %s ORDER BY id",
+            (user_id,)
+        )
+        return cursor.fetchall()
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def rename_portfolio(portfolio_id: int, user_id: int, new_name: str) -> bool:
+    """Renomme un portefeuille. Retourne True si succès."""
+    conn = get_portfolio_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE portfolios SET name = %s WHERE id = %s AND user_id = %s",
+            (new_name, portfolio_id, user_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def delete_portfolio(portfolio_id: int, user_id: int) -> bool:
+    """Supprime un portefeuille et toutes ses données. Retourne True si succès."""
+    conn = get_portfolio_connection()
+    try:
+        cursor = conn.cursor()
+        for table in ("portfolio_state", "portfolio_positions", "portfolio_transactions"):
+            cursor.execute(
+                f"DELETE FROM {table} WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
+        cursor.execute(
+            "DELETE FROM portfolios WHERE id = %s AND user_id = %s",
+            (portfolio_id, user_id)
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 # Initialisation automatique au chargement du module
 try:

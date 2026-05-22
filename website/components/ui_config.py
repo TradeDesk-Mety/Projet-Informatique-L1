@@ -151,7 +151,29 @@ def set_global_ui():
 
       /* Success / error banners */
       [data-testid="stAlert"] { border-radius: 10px !important; }
-      
+
+      /* ── Metric cards : empêcher la troncature des grands montants ── */
+      [data-testid="stMetricValue"] {
+        font-size: clamp(0.8rem, 1.35vw, 1.35rem) !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+      }
+      [data-testid="metric-container"] {
+        overflow: visible !important;
+      }
+      [data-testid="stMetricLabel"] {
+        font-size: 0.78rem !important;
+        color: #8A94A6 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      [data-testid="stMetricDelta"] {
+        font-size: 0.75rem !important;
+        white-space: nowrap !important;
+      }
+
       /* Footer Policies */
       .footer {
         position: fixed;
@@ -180,10 +202,10 @@ def set_global_ui():
     # Affichage du footer global
     st.markdown("""
         <div class="footer">
-            © 2026 TradeDesk | 
-            <a href="#">Politique de Confidentialité</a> | 
-            <a href="#">Conditions d'Utilisation</a> | 
-            <a href="#">Mentions Légales</a>
+            © 2026 TradeDesk |
+            <a href="/Légal?section=confidentialite" target="_self">Politique de Confidentialité</a> |
+            <a href="/Légal?section=conditions" target="_self">Conditions d'Utilisation</a> |
+            <a href="/Légal?section=mentions" target="_self">Mentions Légales</a>
         </div>
     """, unsafe_allow_html=True)
 

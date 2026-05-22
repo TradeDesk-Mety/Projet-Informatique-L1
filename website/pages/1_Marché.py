@@ -9,6 +9,7 @@ import numpy as np
 import data.data as data_mod
 import greeks.greeks as grk
 import visualisation.visualisation as vis
+from datetime import date, timedelta
 
 from website.components.assistant_sidebar import render_assistant
 from website.components.ui_config import set_global_ui
@@ -21,6 +22,16 @@ if not st.session_state.get("logged_in", False):
     st.stop()
 
 st.title("Marché — Analyse des Marchés Financiers")
+
+# ── Devise & taux de change ───────────────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def _eurusd():
+    try:
+        return data_mod.get_eurusd_rate()
+    except Exception:
+        return 1.08
+
+eurusd_rate = _eurusd()
 
 # ── Sélection actif ───────────────────────────────────────────────────────────
 asset_names = list(data_mod.MARKET.keys())
@@ -41,14 +52,59 @@ with col_int:
         help="La durée que représente chaque bougie sur le graphique."
     )
 
-# Avertissement sur les combinaisons incompatibles yfinance
+# ── Sélecteur de date personnalisé (affiché quand période = 1d) ───────────────
 INTRADAY_INTERVALS = {"1m", "5m", "15m", "1h"}
 LONG_PERIODS = {"6mo", "1y", "2y", "5y"}
+
+custom_date = None
+use_date_range = False
+
+if period == "1d":
+    col_date, col_info = st.columns([2, 3])
+    with col_date:
+        custom_date = st.date_input(
+            "Choisir une journée spécifique",
+            value=date.today(),
+            max_value=date.today(),
+            min_value=date.today() - timedelta(days=60),
+            help="Par défaut : aujourd'hui. Choisissez une journée passée pour analyser une séance précise.",
+        )
+    with col_info:
+        is_today = (custom_date == date.today())
+        if is_today:
+            st.info("📅 Affichage de la **séance d'aujourd'hui** (données en direct).")
+        else:
+            st.info(f"📅 Affichage de la séance du **{custom_date.strftime('%d/%m/%Y')}**.")
+        if custom_date.weekday() >= 5:
+            st.warning("Week-end sélectionné — les marchés boursiers sont fermés, les données peuvent être vides.")
+    use_date_range = True
+
+# Devise de l'actif
+is_usd = data_mod.is_usd_asset(selected)
+currency_label = "USD" if is_usd else "EUR"
+currency_note = f"— coté en **{currency_label}**"
+if is_usd:
+    currency_note += f" (1 EUR ≈ {eurusd_rate:.4f} USD)"
+
+st.caption(f"Actif sélectionné : **{selected}** {currency_note}")
+
 if interval in INTRADAY_INTERVALS and period in LONG_PERIODS:
     st.warning(
         f"La combinaison **{period} / {interval}** dépasse la limite yfinance pour les données intraday "
         f"(max ~60 jours pour 1h, ~7 jours pour 1m/5m/15m). Réduisez la période ou augmentez l'intervalle."
     )
+
+
+def load_df(asset, p, iv, date_override=None):
+    """Charge l'historique selon la période ou une date précise."""
+    if date_override is not None:
+        start_str = date_override.strftime("%Y-%m-%d")
+        end_str = (date_override + timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            return data_mod.recuperer_historique_date(asset, start_str, end_str, iv)
+        except Exception:
+            return pd.DataFrame()
+    return data_mod.recuperer_historique(asset, p, iv)
 
 st.divider()
 
@@ -84,15 +140,20 @@ with tab_rt:
             y_mode = "Logarithmique"
 
     @st.cache_data(ttl=30)
-    def fetch_realtime(name, p, iv):
+    def fetch_realtime(name, p, iv, date_str=None):
         try:
-            df = data_mod.recuperer_historique(name, p, iv, force_download=True)
+            if date_str:
+                end_str = (date.fromisoformat(date_str) + timedelta(days=1)).strftime("%Y-%m-%d")
+                df = data_mod.recuperer_historique_date(name, date_str, end_str, iv)
+            else:
+                df = data_mod.recuperer_historique(name, p, iv, force_download=True)
             price = float(df["Close"].iloc[-1]) if not df.empty else None
             return df, price
         except Exception:
             return pd.DataFrame(), None
 
-    df_rt, price_rt = fetch_realtime(selected, period, interval)
+    _date_str = custom_date.strftime("%Y-%m-%d") if use_date_range and custom_date else None
+    df_rt, price_rt = fetch_realtime(selected, period, interval, _date_str)
 
     if price_rt is not None and not df_rt.empty:
         open_price = float(df_rt["Open"].iloc[0])
@@ -103,11 +164,18 @@ with tab_rt:
         label_high = f"Plus haut ({period})"
         label_low = f"Plus bas ({period})"
 
+        sym = "USD" if is_usd else "EUR"
+        def fmt(v):
+            if is_usd:
+                eur_val = v / eurusd_rate
+                return f"{v:.2f} {sym}  ({eur_val:.2f} €)"
+            return f"{v:.2f} €"
+
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Cours actuel", f"{price_rt:.2f}", f"{delta:+.2f} ({delta_pct:+.2f}%)")
-        c2.metric(label_open, f"{open_price:.2f}")
-        c3.metric(label_high, f"{df_rt['High'].max():.2f}")
-        c4.metric(label_low, f"{df_rt['Low'].min():.2f}")
+        c1.metric("Cours actuel", fmt(price_rt), f"{delta:+.2f} ({delta_pct:+.2f}%)")
+        c2.metric(label_open, fmt(open_price))
+        c3.metric(label_high, fmt(df_rt['High'].max()))
+        c4.metric(label_low, fmt(df_rt['Low'].min()))
 
         st.plotly_chart(
             vis.plot_realtime(df_rt, selected, price_rt, y_scale_mode=y_mode),
@@ -149,7 +217,7 @@ with tab_hist:
         "une zone, double-clic pour réinitialiser l'échelle."
     )
     try:
-        df_hist = data_mod.recuperer_historique(selected, period, interval)
+        df_hist = load_df(selected, period, interval, custom_date if use_date_range else None)
         if df_hist.empty:
             st.warning("Aucune donnée disponible pour cette combinaison période/intervalle.")
         else:
@@ -169,7 +237,7 @@ with tab_hist:
 with tab_vvol:
     st.subheader(f"Volatilité et Volumes — {selected} ({period} / {interval})")
     try:
-        df_vv = data_mod.recuperer_historique(selected, period, interval)
+        df_vv = load_df(selected, period, interval, custom_date if use_date_range else None)
         if not df_vv.empty and len(df_vv) > 20:
             col_v1, col_v2 = st.columns(2)
             with col_v1:
@@ -198,7 +266,7 @@ with tab_vvol:
 with tab_stats:
     st.subheader(f"Statistiques & Ratios de Risque — {selected} ({period} / {interval})")
     try:
-        df_s = data_mod.recuperer_historique(selected, period, interval)
+        df_s = load_df(selected, period, interval, custom_date if use_date_range else None)
         if df_s.empty or len(df_s) < 20:
             st.warning(
                 f"Données insuffisantes pour la période **{period} / {interval}** "
@@ -253,7 +321,7 @@ with tab_stats:
 with tab_dist:
     st.subheader(f"Distribution des Rendements — {selected} ({period} / {interval})")
     try:
-        df_d = data_mod.recuperer_historique(selected, period, interval)
+        df_d = load_df(selected, period, interval, custom_date if use_date_range else None)
         if df_d.empty or len(df_d) < 20:
             st.warning(
                 f"Données insuffisantes pour la période **{period} / {interval}** "
@@ -284,7 +352,7 @@ with tab_corr:
             prices_dict = {}
             for a in corr_assets:
                 try:
-                    df_c = data_mod.recuperer_historique(a, period, interval)
+                    df_c = load_df(a, period, interval, custom_date if use_date_range else None)
                     if not df_c.empty:
                         prices_dict[a] = df_c["Close"]
                 except Exception:

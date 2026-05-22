@@ -113,9 +113,17 @@ if not st.session_state.logged_in:
                         st.session_state.user_id = user_id
                         st.session_state.user_username = username.strip()
 
+                        # Chargement du premier portefeuille de l'utilisateur
+                        from data.database import get_portfolios, create_portfolio as _cp
+                        ptfs = get_portfolios(user_id)
+                        if not ptfs:
+                            pid = _cp(user_id, "Principal", 10000.0)
+                        else:
+                            pid = ptfs[0][0]
                         p = Portfolio(initial_cash=10000.0)
-                        p.load_from_db(user_id)
+                        p.load_from_db(user_id, pid)
                         st.session_state.portfolio = p
+                        st.session_state[f"portfolio_{pid}"] = p
 
                         st.success("✅ Connexion réussie !")
                         st.session_state.show_onboarding = True
@@ -188,8 +196,10 @@ if not st.session_state.logged_in:
                         conn.commit()
                         conn.close()
                         
+                        from data.database import create_portfolio as _cp2
+                        pid_new = _cp2(user_id, "Principal", float(capital_initial))
                         p = Portfolio(initial_cash=float(capital_initial))
-                        p.save_to_db(user_id)
+                        p.save_to_db(user_id, pid_new)
 
                         st.success("🎉 Compte créé avec succès ! Connecte-toi maintenant.")
 
@@ -201,9 +211,17 @@ if not st.session_state.logged_in:
 #  UTILISATEUR CONNECTÉ — Portefeuille en session
 # ═══════════════════════════════════════════════════════════════════════════════
 if "portfolio" not in st.session_state:
+    _uid = st.session_state.user_id
+    from data.database import get_portfolios as _gp, create_portfolio as _cp3
+    _ptfs = _gp(_uid)
+    if not _ptfs:
+        _pid = _cp3(_uid, "Principal", 10000.0)
+    else:
+        _pid = _ptfs[0][0]
     p = Portfolio(initial_cash=10000.0)
-    p.load_from_db(st.session_state.user_id)
+    p.load_from_db(_uid, _pid)
     st.session_state.portfolio = p
+    st.session_state[f"portfolio_{_pid}"] = p
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:

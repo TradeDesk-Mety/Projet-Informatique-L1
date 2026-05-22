@@ -6,8 +6,12 @@ import streamlit as st
 
 from website.components.assistant_sidebar import render_assistant
 from website.components.ui_config import set_global_ui
-from data.database import get_portfolio_connection
+from data.database import (
+    get_portfolio_connection, get_portfolios, create_portfolio,
+    rename_portfolio, delete_portfolio,
+)
 from data.security import hash_password, verify_password
+from equities.equities import Portfolio
 
 set_global_ui()
 render_assistant()
@@ -40,8 +44,9 @@ def load_user_info(uid: int) -> dict:
 user_info = load_user_info(user_id)
 
 # ── Onglets ───────────────────────────────────────────────────────────────────
-tab_profil, tab_pwd, tab_danger = st.tabs([
+tab_profil, tab_portfolios, tab_pwd, tab_danger = st.tabs([
     "Profil",
+    "Mes Portefeuilles",
     "Mot de Passe",
     "Supprimer le Compte",
 ])
@@ -76,7 +81,85 @@ with tab_profil:
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Modifier le mot de passe
+# TAB 2 — Mes Portefeuilles
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_portfolios:
+    st.subheader("Gestion des Portefeuilles")
+    st.caption("Créez plusieurs portefeuilles pour tester différentes stratégies en parallèle.")
+
+    portfolios = get_portfolios(user_id)
+
+    if not portfolios:
+        st.info("Aucun portefeuille trouvé. Créez-en un ci-dessous.")
+    else:
+        for ptf_id, ptf_name, ptf_initial, ptf_created in portfolios:
+            with st.expander(f"**{ptf_name}** — #{ptf_id}  (créé le {str(ptf_created)[:10]})", expanded=False):
+                col_a, col_b = st.columns(2)
+                col_a.metric("Capital initial", f"{ptf_initial:,.2f} €")
+
+                # Valeur actuelle depuis session_state si disponible
+                p_obj = st.session_state.get(f"portfolio_{ptf_id}")
+                if p_obj:
+                    tot = p_obj.cash + sum(i["quantity"] * i["avg_price"] for i in p_obj.positions.values())
+                    perf_val = ((tot - p_obj.initial_cash) / p_obj.initial_cash) * 100
+                    col_b.metric("Performance estimée", f"{perf_val:+.2f} %")
+
+                st.markdown("##### Renommer")
+                new_name_key = f"rename_{ptf_id}"
+                new_name_val = st.text_input("Nouveau nom", key=new_name_key, placeholder=ptf_name)
+                if st.button("Renommer", key=f"btn_rename_{ptf_id}"):
+                    if new_name_val.strip():
+                        if rename_portfolio(ptf_id, user_id, new_name_val.strip()):
+                            st.success(f"Portefeuille renommé en « {new_name_val.strip()} » !")
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors du renommage.")
+                    else:
+                        st.error("Le nom ne peut pas être vide.")
+
+                if len(portfolios) > 1:
+                    st.markdown("##### Supprimer ce portefeuille")
+                    st.warning("Cette action est irréversible — toutes les positions et transactions seront perdues.")
+                    confirm_del = st.checkbox(
+                        "Je confirme la suppression définitive de ce portefeuille",
+                        key=f"confirm_del_{ptf_id}"
+                    )
+                    if st.button("Supprimer", key=f"btn_del_{ptf_id}", type="primary"):
+                        if confirm_del:
+                            delete_portfolio(ptf_id, user_id)
+                            # Nettoyer session_state
+                            if f"portfolio_{ptf_id}" in st.session_state:
+                                del st.session_state[f"portfolio_{ptf_id}"]
+                            st.success("Portefeuille supprimé.")
+                            st.rerun()
+                        else:
+                            st.error("Cochez la case de confirmation pour supprimer.")
+                else:
+                    st.info("Vous ne pouvez pas supprimer votre seul portefeuille.")
+
+    st.divider()
+    st.markdown("#### Créer un nouveau portefeuille")
+    with st.form("form_new_portfolio"):
+        new_ptf_name = st.text_input("Nom du portefeuille", placeholder="ex : Stratégie Croissance")
+        new_ptf_cash = st.number_input(
+            "Capital de départ (€)", min_value=100.0, max_value=10_000_000.0,
+            value=10_000.0, step=1000.0
+        )
+        submitted_ptf = st.form_submit_button("Créer le portefeuille", type="primary")
+
+    if submitted_ptf:
+        if not new_ptf_name.strip():
+            st.error("Entrez un nom.")
+        else:
+            pid = create_portfolio(user_id, new_ptf_name.strip(), new_ptf_cash)
+            new_p = Portfolio(new_ptf_cash)
+            new_p.save_to_db(user_id, pid)
+            st.success(f"Portefeuille **« {new_ptf_name.strip()} »** créé avec {new_ptf_cash:,.0f} € de capital !")
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — Modifier le mot de passe
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_pwd:
     st.subheader("Modifier le Mot de Passe")
@@ -114,7 +197,7 @@ with tab_pwd:
                 st.error(f"Erreur : {e}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — Supprimer le compte
+# TAB 4 — Supprimer le compte
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_danger:
     st.subheader("Supprimer mon Compte")

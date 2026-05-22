@@ -151,68 +151,87 @@ class Portfolio:
         self.positions = data.get("positions", {})
         self.transactions = data.get("transactions", [])
 
-    def save_to_db(self, user_id: int = 1, db_path: str = None):
-        """Sauvegarde l'état du portefeuille pour un utilisateur spécifique dans SQL."""
+    def save_to_db(self, user_id: int = 1, portfolio_id: int = 1, db_path: str = None):
+        """Sauvegarde l'état du portefeuille pour un utilisateur et un portefeuille spécifiques."""
         from data.database import get_portfolio_connection
-            
+
         conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
-            
+
             # 1. Sauvegarde du solde cash
-            cursor.execute("DELETE FROM portfolio_state WHERE user_id = %s", (user_id,))
-            cursor.execute("INSERT INTO portfolio_state (user_id, cash, initial_cash) VALUES (%s, %s, %s)", 
-                           (user_id, self.cash, self.initial_cash))
-            
+            cursor.execute(
+                "DELETE FROM portfolio_state WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
+            cursor.execute(
+                "INSERT INTO portfolio_state (user_id, portfolio_id, cash, initial_cash) VALUES (%s, %s, %s, %s)",
+                (user_id, portfolio_id, self.cash, self.initial_cash)
+            )
+
             # 2. Sauvegarde des positions
-            cursor.execute("DELETE FROM portfolio_positions WHERE user_id = %s", (user_id,))
+            cursor.execute(
+                "DELETE FROM portfolio_positions WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
             for ticker, pos in self.positions.items():
-                cursor.execute("INSERT INTO portfolio_positions (user_id, asset, quantity, avg_price) VALUES (%s, %s, %s, %s)",
-                               (user_id, ticker, pos["quantity"], pos["avg_price"]))
-                               
+                cursor.execute(
+                    "INSERT INTO portfolio_positions (user_id, portfolio_id, asset, quantity, avg_price) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, portfolio_id, ticker, pos["quantity"], pos["avg_price"])
+                )
+
             # 3. Sauvegarde de l'historique des transactions
-            cursor.execute("DELETE FROM portfolio_transactions WHERE user_id = %s", (user_id,))
+            cursor.execute(
+                "DELETE FROM portfolio_transactions WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
             for trade in self.transactions:
                 cursor.execute("""
-                INSERT INTO portfolio_transactions (user_id, timestamp, type, asset, quantity, price, commission, total_net)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO portfolio_transactions
+                    (user_id, portfolio_id, timestamp, type, asset, quantity, price, commission, total_net)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    user_id,
-                    trade["timestamp"],
-                    trade["type"],
-                    trade["ticker"],
-                    trade["quantity"],
-                    trade["price"],
-                    trade["commission"],
-                    trade["total_net"]
+                    user_id, portfolio_id,
+                    trade["timestamp"], trade["type"], trade["ticker"],
+                    trade["quantity"], trade["price"], trade["commission"], trade["total_net"]
                 ))
             conn.commit()
         finally:
             conn.close()
 
-    def load_from_db(self, user_id: int = 1, db_path: str = None):
-        """Charge l'état du portefeuille d'un utilisateur spécifique depuis SQL."""
+    def load_from_db(self, user_id: int = 1, portfolio_id: int = 1, db_path: str = None):
+        """Charge l'état du portefeuille d'un utilisateur et d'un portefeuille spécifiques."""
         from data.database import get_portfolio_connection
 
         conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
-            
+
             # 1. Chargement du cash
-            cursor.execute("SELECT cash, initial_cash FROM portfolio_state WHERE user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT cash, initial_cash FROM portfolio_state WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
             row = cursor.fetchone()
             if row:
                 self.cash = row[0]
                 self.initial_cash = row[1]
-                
+
             # 2. Chargement des positions
-            cursor.execute("SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = %s AND portfolio_id = %s",
+                (user_id, portfolio_id)
+            )
             self.positions = {}
             for row in cursor.fetchall():
                 self.positions[row[0]] = {"quantity": int(row[1]), "avg_price": float(row[2])}
-                
+
             # 3. Chargement des transactions
-            cursor.execute("SELECT timestamp, type, asset, quantity, price, commission, total_net FROM portfolio_transactions WHERE user_id = %s ORDER BY id ASC", (user_id,))
+            cursor.execute(
+                "SELECT timestamp, type, asset, quantity, price, commission, total_net "
+                "FROM portfolio_transactions WHERE user_id = %s AND portfolio_id = %s ORDER BY id ASC",
+                (user_id, portfolio_id)
+            )
             self.transactions = []
             for row in cursor.fetchall():
                 self.transactions.append({

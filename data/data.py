@@ -1046,6 +1046,60 @@ MARKET = {
 
 
 
+# ── Ensemble des cryptomonnaies disponibles ───────────────────────────────────
+CRYPTO_ASSETS: set = {k for k, v in MARKET.items() if v.endswith("-USD") and "-" in v}
+
+# Suffixes d'exchanges européens (actifs cotés en EUR/GBP/CHF...)
+_EU_SUFFIXES = {
+    ".PA", ".BR", ".AS", ".MI", ".MC", ".DE", ".L", ".SW",
+    ".ST", ".CO", ".OL", ".HE", ".LS", ".VI", ".PR", ".WA",
+}
+
+def is_usd_asset(asset_name: str) -> bool:
+    """Retourne True si l'actif est coté en USD (actions US et cryptos)."""
+    ticker = MARKET.get(asset_name, "")
+    if any(ticker.upper().endswith(s.upper()) for s in _EU_SUFFIXES):
+        return False
+    if ticker.startswith("^"):
+        return False
+    return True
+
+
+@st.cache_data(ttl=3600)
+def get_eurusd_rate() -> float:
+    """Retourne le taux de change EUR/USD actuel (1 EUR = X USD). Fallback : 1.08."""
+    try:
+        ticker_obj = yf.Ticker("EURUSD=X")
+        df_fx = ticker_obj.history(period="1d")
+        if not df_fx.empty:
+            return float(df_fx["Close"].iloc[-1])
+    except Exception:
+        pass
+    return 1.08
+
+
+def usd_to_eur(amount_usd: float) -> float:
+    """Convertit un montant USD en EUR au taux de change actuel."""
+    rate = get_eurusd_rate()
+    if rate > 0:
+        return amount_usd / rate
+    return amount_usd
+
+
+@st.cache_data(ttl=300)
+def recuperer_historique_date(action_choisie: str, start_date: str, end_date: str, intervalle: str = "1h") -> "pd.DataFrame":
+    """Récupère l'historique pour une plage de dates précise (format YYYY-MM-DD)."""
+    import pandas as pd
+    if not verifier_action(action_choisie):
+        raise ValueError(f"'{action_choisie}' inconnu.")
+    try:
+        ticker_sym = MARKET[action_choisie]
+        hist = yf.Ticker(ticker_sym).history(start=start_date, end=end_date, interval=intervalle)
+        return hist
+    except Exception as e:
+        raise ValueError(f"Erreur lors de la récupération par date de {action_choisie} : {e}")
+
+
 #Vérification de si l'action est dans le dictionnaire
 def verifier_action(action_choisie)->bool :
     return action_choisie in MARKET
