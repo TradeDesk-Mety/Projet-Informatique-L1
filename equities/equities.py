@@ -159,15 +159,13 @@ class Portfolio:
         try:
             cursor = conn.cursor()
 
-            # 1. Sauvegarde du solde cash
-            cursor.execute(
-                "DELETE FROM portfolio_state WHERE user_id = %s AND portfolio_id = %s",
-                (user_id, portfolio_id)
-            )
-            cursor.execute(
-                "INSERT INTO portfolio_state (user_id, portfolio_id, cash, initial_cash) VALUES (%s, %s, %s, %s)",
-                (user_id, portfolio_id, self.cash, self.initial_cash)
-            )
+            # 1. Sauvegarde du solde cash (UPSERT — évite toute UniqueViolation)
+            cursor.execute("""
+                INSERT INTO portfolio_state (user_id, portfolio_id, cash, initial_cash)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id, portfolio_id)
+                DO UPDATE SET cash = EXCLUDED.cash, initial_cash = EXCLUDED.initial_cash
+            """, (user_id, portfolio_id, self.cash, self.initial_cash))
 
             # 2. Sauvegarde des positions
             cursor.execute(

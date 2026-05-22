@@ -364,7 +364,7 @@ def generate_response(query: str, p) -> str:
             pass
 
     # ── 2. Taux de change EUR/USD ─────────────────────────────────────────────
-    if any(w in q for w in ["eur/usd", "eurusd", "euro dollar", "taux de change", "conversion", "dollar"]):
+    if any(w in q for w in ["eur/usd", "eurusd", "euro dollar", "taux de change", "conversion", "dollar", "combien vaut"]):
         try:
             import data.data as data_mod
             rate = data_mod.get_eurusd_rate()
@@ -381,7 +381,10 @@ def generate_response(query: str, p) -> str:
     conseil_triggers = [
         "meilleur action", "meilleure action", "quoi acheter", "recommandation",
         "conseil", "acheter quoi", "meilleur investissement", "que acheter",
-        "meilleure crypto", "meilleur etf"
+        "meilleure crypto", "meilleur etf", "action acheter", "dans quoi investir",
+        "que investir", "que me conseilles", "que conseilles", "investir dans",
+        "acheter comme action", "quelle action", "quel actif", "quelle crypto",
+        "quel etf", "bonne action", "bonne crypto", "bon etf"
     ]
     if any(t in q for t in conseil_triggers):
         is_crypto = "crypto" in q
@@ -428,9 +431,32 @@ def generate_response(query: str, p) -> str:
     # ── 4. Info portefeuille ──────────────────────────────────────────────────
     portfolio_triggers = [
         "portefeuille", "solde", "liquidité", "cash", "gain", "perte",
-        "performance", "positions", "combien", "mon capital"
+        "performance", "positions", "combien", "mon capital", "mes portefeuilles",
+        "valeur", "capital"
     ]
     if any(w in q for w in portfolio_triggers):
+        # Détection si l'utilisateur demande la liste des portefeuilles
+        if any(w in q for w in ["mes portefeuilles", "liste", "combien de portefeuille", "tous mes"]):
+            try:
+                import streamlit as st
+                uid = st.session_state.get("user_id")
+                if uid:
+                    from data.database import get_portfolios
+                    ptfs = get_portfolios(uid)
+                    if ptfs:
+                        lines = "\n".join(
+                            f"  - **{r[1]}** (#{r[0]}) — Capital initial : {r[2]:,.0f} €"
+                            for r in ptfs
+                        )
+                        return (
+                            f"💼 **Tes {len(ptfs)} portefeuille(s)** :\n{lines}\n\n"
+                            f"Pour switcher, utilise le menu déroulant **en haut de la sidebar** "
+                            f"dans l'onglet Portefeuille."
+                        )
+            except Exception:
+                pass
+
+        # Portefeuille actif
         total_value = p.cash
         for t, info in p.positions.items():
             total_value += info["quantity"] * info["avg_price"]
@@ -438,21 +464,30 @@ def generate_response(query: str, p) -> str:
         nb_pos = len(p.positions)
         nb_tx = len(p.transactions)
 
-        # Répartition par type
-        nb_crypto = sum(1 for t in p.positions if "USD" in t or "-USD" in t.split("_")[0] if "_" not in t)
         nb_options = sum(1 for t in p.positions if "_" in t)
+        nb_crypto = sum(1 for t in p.positions if "_" not in t and "-" in t)
         nb_stocks = nb_pos - nb_crypto - nb_options
 
         perf_emoji = "📈" if perf >= 0 else "📉"
+
+        # Nom du portefeuille actif depuis session
+        try:
+            import streamlit as st
+            active_label = st.session_state.get("active_portfolio_label", "Principal")
+            ptf_name = active_label.split(" (#")[0]
+        except Exception:
+            ptf_name = "Principal"
+
         return (
-            f"💼 **Ton Portefeuille**\n\n"
+            f"💼 **Portefeuille actif : {ptf_name}**\n\n"
             f"- 💵 Liquidités : **{p.cash:,.2f} €**\n"
             f"- 📦 Positions ouvertes : **{nb_pos}** actif(s)\n"
             f"  - Actions/ETF : {nb_stocks} · Cryptos : {nb_crypto} · Options : {nb_options}\n"
             f"- 💰 Valeur estimée : **{total_value:,.2f} €**\n"
             f"- {perf_emoji} Performance : **{perf:+.2f}%** ({total_value - p.initial_cash:+,.2f} €)\n"
             f"- 📋 Transactions : **{nb_tx}** au total\n\n"
-            f"Pour le détail complet, consulte l'onglet **Portefeuille**."
+            f"💡 Tape *'mes portefeuilles'* pour voir tous tes portefeuilles, "
+            f"ou va dans **Paramètres → Mes Portefeuilles** pour les gérer."
         )
 
     # ── 5. Aide contextuelle sur les onglets ──────────────────────────────────

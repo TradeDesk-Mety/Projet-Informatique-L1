@@ -171,18 +171,68 @@ def init_db():
     )
     """)
 
-    # ── Migration rétrocompatible : ajout de portfolio_id si absent ──────────
+    # ── Migration 1 : ajout colonne portfolio_id si absente ─────────────────
     for table, col_def in [
         ("portfolio_state",        "portfolio_id INTEGER NOT NULL DEFAULT 1"),
         ("portfolio_positions",    "portfolio_id INTEGER NOT NULL DEFAULT 1"),
         ("portfolio_transactions", "portfolio_id INTEGER NOT NULL DEFAULT 1"),
     ]:
         try:
-            cursor.execute(
-                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_def}"
-            )
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_def}")
+            conn.commit()
         except Exception:
-            pass  # colonne déjà présente
+            conn.rollback()
+
+    # ── Migration 2 : corriger la PRIMARY KEY de portfolio_state ────────────
+    # Ancienne PK : user_id seul → ne supporte qu'un portefeuille par user
+    # Nouvelle PK : (user_id, portfolio_id) → multi-portefeuilles
+    try:
+        cursor.execute("""
+            DO $$
+            BEGIN
+                -- Vérifie si portfolio_id est absent de la PK actuelle
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.key_column_usage
+                    WHERE table_name = 'portfolio_state'
+                      AND constraint_name = (
+                          SELECT constraint_name FROM information_schema.table_constraints
+                          WHERE table_name = 'portfolio_state' AND constraint_type = 'PRIMARY KEY'
+                          LIMIT 1
+                      )
+                      AND column_name = 'portfolio_id'
+                ) THEN
+                    ALTER TABLE portfolio_state DROP CONSTRAINT IF EXISTS portfolio_state_pkey;
+                    ALTER TABLE portfolio_state ADD PRIMARY KEY (user_id, portfolio_id);
+                END IF;
+            END $$;
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    # ── Migration 3 : corriger la PRIMARY KEY de portfolio_positions ─────────
+    try:
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.key_column_usage
+                    WHERE table_name = 'portfolio_positions'
+                      AND constraint_name = (
+                          SELECT constraint_name FROM information_schema.table_constraints
+                          WHERE table_name = 'portfolio_positions' AND constraint_type = 'PRIMARY KEY'
+                          LIMIT 1
+                      )
+                      AND column_name = 'portfolio_id'
+                ) THEN
+                    ALTER TABLE portfolio_positions DROP CONSTRAINT IF EXISTS portfolio_positions_pkey;
+                    ALTER TABLE portfolio_positions ADD PRIMARY KEY (user_id, portfolio_id, asset);
+                END IF;
+            END $$;
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
     conn.commit()
     cursor.close()

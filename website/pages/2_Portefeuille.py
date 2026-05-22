@@ -271,12 +271,13 @@ with tab_order:
                     brut = comm = total = 0.0
 
         if is_buy or (not is_buy and trade_asset is not None):
-            qty_step = 0.001 if inst_type == "Cryptomonnaie" else 1
-            qty_min = 0.001 if inst_type == "Cryptomonnaie" else 1
+            if inst_type == "Cryptomonnaie":
+                qty_min, qty_step, qty_val, qty_fmt = 0.001, 0.001, 0.1, "%.4f"
+            else:
+                qty_min, qty_step, qty_val, qty_fmt = 1.0, 1.0, 1.0, "%.0f"
             qty = st.number_input(
                 "Quantité", min_value=qty_min, step=qty_step,
-                value=float(1) if inst_type != "Cryptomonnaie" else 0.1,
-                format="%.3f" if inst_type == "Cryptomonnaie" else "%.0f",
+                value=qty_val, format=qty_fmt,
             )
             if is_buy:
                 raw_price = mkt.get(trade_asset, 0.0)
