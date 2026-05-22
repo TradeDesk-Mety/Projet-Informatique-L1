@@ -164,18 +164,32 @@ with tab_rt:
         label_high = f"Plus haut ({period})"
         label_low = f"Plus bas ({period})"
 
-        sym = "USD" if is_usd else "EUR"
-        def fmt(v):
-            if is_usd:
-                eur_val = v / eurusd_rate
-                return f"{v:.2f} {sym}  ({eur_val:.2f} €)"
-            return f"{v:.2f} €"
+        def to_display(v):
+            """Retourne (valeur affichée en €, tooltip USD si applicable)."""
+            if is_usd and eurusd_rate > 0:
+                return v / eurusd_rate, f"{v:.2f} USD"
+            return v, None
+
+        def eur_str(v):
+            return f"{to_display(v)[0]:,.2f} €"
+
+        p_rt_eur, p_rt_tip   = to_display(price_rt)
+        p_op_eur, p_op_tip   = to_display(open_price)
+        p_hi_eur, p_hi_tip   = to_display(df_rt['High'].max())
+        p_lo_eur, p_lo_tip   = to_display(df_rt['Low'].min())
+        delta_eur = p_rt_eur - p_op_eur
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Cours actuel", fmt(price_rt), f"{delta:+.2f} ({delta_pct:+.2f}%)")
-        c2.metric(label_open, fmt(open_price))
-        c3.metric(label_high, fmt(df_rt['High'].max()))
-        c4.metric(label_low, fmt(df_rt['Low'].min()))
+        c1.metric("Cours actuel", f"{p_rt_eur:,.2f} €",
+                  f"{delta_eur:+.2f} € ({delta_pct:+.2f}%)",
+                  help=p_rt_tip)
+        c2.metric(label_open,  f"{p_op_eur:,.2f} €", help=p_op_tip)
+        c3.metric(label_high,  f"{p_hi_eur:,.2f} €", help=p_hi_tip)
+        c4.metric(label_low,   f"{p_lo_eur:,.2f} €", help=p_lo_tip)
+
+        if is_usd:
+            st.caption(f"💱 Prix en USD → converti en EUR au taux **1 € = {eurusd_rate:.4f} $** · "
+                       f"Survolez les métriques pour voir le prix original en USD.")
 
         st.plotly_chart(
             vis.plot_realtime(df_rt, selected, price_rt, y_scale_mode=y_mode),
