@@ -34,3 +34,8 @@ build/
 .idea/
 .DS_Store__pycache__/
 *.pyc
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
