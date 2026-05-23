@@ -234,13 +234,13 @@ def init_db():
     except Exception:
         conn.rollback()
 
-    # ── Migration 4 : modifier la colonne quantity en REAL ─────────────────
-    try:
-        cursor.execute("ALTER TABLE portfolio_positions ALTER COLUMN quantity TYPE REAL")
-        cursor.execute("ALTER TABLE portfolio_transactions ALTER COLUMN quantity TYPE REAL")
-        conn.commit()
-    except Exception:
-        conn.rollback()
+    # ── Migration 4 : quantity INTEGER → REAL (support des quantités fractionnaires crypto) ─
+    for table in ("portfolio_positions", "portfolio_transactions"):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ALTER COLUMN quantity TYPE REAL")
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     conn.commit()
     cursor.close()

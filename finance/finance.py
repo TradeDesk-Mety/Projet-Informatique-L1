@@ -181,14 +181,15 @@ def _black_scholes_pricing_py(S: float, K: float, T: float, r: float, sigma: flo
 
 # ── Wrappers Python Exposés ──────────────────────────────────────────────────
 
-def total_brut(nb_trades: float, prix: float) -> float:
+def total_brut(nb_trades, prix: float) -> float:
     """Calcul du total brut en euros pour un trade (quantité * prix)"""
-    if use_fallback:
-        if nb_trades <= 0 or prix <= 0:
-            raise ValueError("Paramètres invalides pour le calcul brut (doivent être > 0)")
-        return float(nb_trades * prix)
-    
-    res = _lib.total_brut(float(nb_trades), float(prix))
+    qty = float(nb_trades)
+    if qty <= 0 or float(prix) <= 0:
+        raise ValueError("Paramètres invalides pour le calcul brut (doivent être > 0)")
+    # Quantité fractionnaire (crypto) ou fallback → calcul Python direct
+    if use_fallback or (qty % 1 != 0):
+        return qty * float(prix)
+    res = _lib.total_brut(int(qty), float(prix))
     if res == -1.0:
         raise ValueError("Paramètres invalides pour le calcul brut (doivent être > 0)")
     return res
@@ -205,30 +206,30 @@ def calculer_commission(prix: float, nb_trades: float) -> float:
         raise ValueError("Paramètres invalides pour le calcul de la commission (doivent être > 0)")
     return res
 
-def total_net_achat(nb_trades: float, prix_achat: float) -> float:
+def total_net_achat(nb_trades, prix_achat: float) -> float:
     """Calcul du coût total net d'achat (brut + commission)"""
-    if use_fallback:
-        if nb_trades <= 0 or prix_achat <= 0:
-            raise ValueError("Paramètres invalides pour le calcul net d'achat (doivent être > 0)")
-        brut = float(nb_trades * prix_achat)
-        commission = float(brut * 0.01)
-        return brut + commission
-    
-    res = _lib.total_net_achat(float(nb_trades), float(prix_achat))
+    qty = float(nb_trades)
+    if qty <= 0 or float(prix_achat) <= 0:
+        raise ValueError("Paramètres invalides pour le calcul net d'achat (doivent être > 0)")
+    # Quantité fractionnaire (crypto) ou fallback → calcul Python direct
+    if use_fallback or (qty % 1 != 0):
+        brut = qty * float(prix_achat)
+        return brut + brut * 0.01
+    res = _lib.total_net_achat(int(qty), float(prix_achat))
     if res == -1.0:
         raise ValueError("Paramètres invalides pour le calcul net d'achat (doivent être > 0)")
     return res
 
-def total_net_vente(nb_trades: float, prix_vente: float) -> float:
+def total_net_vente(nb_trades, prix_vente: float) -> float:
     """Calcul du montant net reçu après vente (brut - commission)"""
-    if use_fallback:
-        if nb_trades <= 0 or prix_vente <= 0:
-            raise ValueError("Paramètres invalides pour le calcul net de vente (doivent être > 0)")
-        brut = float(nb_trades * prix_vente)
-        commission = float(brut * 0.01)
-        return brut - commission
-    
-    res = _lib.total_net_vente(float(nb_trades), float(prix_vente))
+    qty = float(nb_trades)
+    if qty <= 0 or float(prix_vente) <= 0:
+        raise ValueError("Paramètres invalides pour le calcul net de vente (doivent être > 0)")
+    # Quantité fractionnaire (crypto) ou fallback → calcul Python direct
+    if use_fallback or (qty % 1 != 0):
+        brut = qty * float(prix_vente)
+        return brut - brut * 0.01
+    res = _lib.total_net_vente(int(qty), float(prix_vente))
     if res == -1.0:
         raise ValueError("Paramètres invalides pour le calcul net de vente (doivent être > 0)")
     return res
