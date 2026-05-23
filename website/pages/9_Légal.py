@@ -10,7 +10,7 @@ set_global_ui()
 st.title("Informations Légales")
 st.caption("TradeDesk — Simulateur boursier pédagogique · 2026")
 
-# Sélection via les query params ou navigation par défaut
+#Sélection via les query params ou navigation par défaut
 params = st.query_params
 section_default = params.get("section", "confidentialite")
 
@@ -20,9 +20,7 @@ tab_conf, tab_cgu, tab_mentions = st.tabs([
     "Mentions Légales",
 ])
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — Politique de Confidentialité
-# ══════════════════════════════════════════════════════════════════════════════
+#TAB 1 — Politique de Confidentialité
 with tab_conf:
     st.header("Politique de Confidentialité")
     st.caption("Dernière mise à jour : 1er janvier 2026")
@@ -99,9 +97,7 @@ Pour toute question relative à la protection de vos données, contactez l'équi
 via le dépôt GitHub du projet.
 """)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Conditions d'Utilisation
-# ══════════════════════════════════════════════════════════════════════════════
+#TAB 2 — Conditions d'Utilisation
 with tab_cgu:
     st.header("Conditions Générales d'Utilisation")
     st.caption("Dernière mise à jour : 1er janvier 2026")
@@ -179,9 +175,7 @@ Les présentes CGU sont régies par le **droit français**.
 Tout litige relève de la compétence exclusive des tribunaux français.
 """)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — Mentions Légales
-# ══════════════════════════════════════════════════════════════════════════════
+#TAB 3 — Mentions Légales
 with tab_mentions:
     st.header("Mentions Légales")
     st.caption("Conformément à la loi n° 2004-575 du 21 juin 2004 (LCEN)")
@@ -259,6 +253,6 @@ Si vous découvrez une faille de sécurité, merci de la signaler
 de façon responsable via le dépôt GitHub (issue privée ou contact direct).
 """)
 
-    # Séparateur et retour
+    #Séparateur et retour
     st.divider()
     st.info("Pour revenir à l'application, utilisez le menu de navigation à gauche.")

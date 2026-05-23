@@ -23,7 +23,7 @@ if not st.session_state.get("logged_in", False):
 
 st.title("Marché — Analyse des Marchés Financiers")
 
-# ── Devise & taux de change ───────────────────────────────────────────────────
+#Devise & taux de change
 @st.cache_data(ttl=3600)
 def _eurusd():
     try:
@@ -33,7 +33,7 @@ def _eurusd():
 
 eurusd_rate = _eurusd()
 
-# ── Sélection actif ───────────────────────────────────────────────────────────
+#Sélection actif
 asset_names = list(data_mod.MARKET.keys())
 col_sel, col_per, col_int = st.columns([3, 1.5, 1.5])
 with col_sel:
@@ -52,7 +52,7 @@ with col_int:
         help="La durée que représente chaque bougie sur le graphique."
     )
 
-# ── Sélecteur de date personnalisé (affiché quand période = 1d) ───────────────
+#Sélecteur de date personnalisé (affiche la période)
 INTRADAY_INTERVALS = {"1m", "5m", "15m", "1h"}
 LONG_PERIODS = {"6mo", "1y", "2y", "5y"}
 
@@ -79,7 +79,7 @@ if period == "1d":
             st.warning("Week-end sélectionné — les marchés boursiers sont fermés, les données peuvent être vides.")
     use_date_range = True
 
-# Devise de l'actif
+#Devise de l'actif
 is_usd = data_mod.is_usd_asset(selected)
 currency_label = "USD" if is_usd else "EUR"
 currency_note = f"— coté en **{currency_label}**"
@@ -94,7 +94,6 @@ if interval in INTRADAY_INTERVALS and period in LONG_PERIODS:
         f"(max ~60 jours pour 1h, ~7 jours pour 1m/5m/15m). Réduisez la période ou augmentez l'intervalle."
     )
 
-
 def load_df(asset, p, iv, date_override=None):
     """Charge l'historique selon la période ou une date précise."""
     if date_override is not None:
@@ -108,13 +107,13 @@ def load_df(asset, p, iv, date_override=None):
 
 st.divider()
 
-# ── Onglets de navigation ─────────────────────────────────────────────────────
+#Onglets de navigation
 tab_rt, tab_hist, tab_vvol, tab_stats, tab_dist, tab_corr = st.tabs([
     "Temps Réel", "Historique", "Volatilité & Volume",
     "Statistiques", "Rendements", "Corrélation"
 ])
 
-# ─────────────────────── TAB 1 : TEMPS RÉEL ──────────────────────────────────
+#TAB 1 : TEMPS RÉEL
 with tab_rt:
     is_intraday = interval in INTRADAY_INTERVALS
     label_period = f"{period} / {interval}"
@@ -196,7 +195,7 @@ with tab_rt:
             use_container_width=True
         )
 
-        # RSI — nécessite min 15 bougies
+        #RSI — nécessite min 15 bougies
         close_rt = df_rt["Close"].dropna()
         if len(close_rt) >= 15:
             try:
@@ -223,7 +222,7 @@ with tab_rt:
         st.cache_data.clear()
         st.rerun()
 
-# ─────────────────────── TAB 2 : HISTORIQUE ──────────────────────────────────
+#TAB 2 : HISTORIQUE
 with tab_hist:
     st.subheader(f"Historique — {selected} ({period} / {interval})")
     st.info(
@@ -247,7 +246,7 @@ with tab_hist:
     except Exception as e:
         st.error(f"Erreur de chargement : {e}")
 
-# ─────────────────────── TAB 3 : VOLATILITÉ & VOLUME ─────────────────────────
+#TAB 3 : VOLATILITÉ & VOLUME
 with tab_vvol:
     st.subheader(f"Volatilité et Volumes — {selected} ({period} / {interval})")
     try:
@@ -276,7 +275,7 @@ with tab_vvol:
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# ─────────────────────── TAB 4 : STATISTIQUES ────────────────────────────────
+#TAB 4 : STATISTIQUES
 with tab_stats:
     st.subheader(f"Statistiques & Ratios de Risque — {selected} ({period} / {interval})")
     try:
@@ -331,7 +330,7 @@ with tab_stats:
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# ─────────────────────── TAB 5 : DISTRIBUTION ────────────────────────────────
+#TAB 5 : DISTRIBUTION
 with tab_dist:
     st.subheader(f"Distribution des Rendements — {selected} ({period} / {interval})")
     try:
@@ -349,7 +348,7 @@ with tab_dist:
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# ─────────────────────── TAB 6 : CORRÉLATION ─────────────────────────────────
+#TAB 6 : CORRÉLATION
 with tab_corr:
     st.subheader("Matrice de Corrélation entre Rendements")
     default_assets = [

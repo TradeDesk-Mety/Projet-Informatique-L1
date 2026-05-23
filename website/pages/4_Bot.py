@@ -19,7 +19,7 @@ from website.components.ui_config import set_global_ui
 set_global_ui()
 render_assistant()
 
-# ── Garde d'authentification ──────────────────────────────────────────────────
+#Garde d'authentification
 if not st.session_state.get("logged_in", False):
     st.warning("Connecte-toi depuis la page d'accueil.")
     st.stop()
@@ -36,22 +36,22 @@ def add_log(message: str):
     ts = datetime.now().strftime("%H:%M:%S")
     st.session_state.bot_logs.append(f"[{ts}] {message}")
 
-# ── Initialisation de la session ──────────────────────────────────────────────
+#Initialisation de la session
 if "bot_logs" not in st.session_state:
     st.session_state.bot_logs = []
 if "bot_analysis" not in st.session_state:
-    st.session_state.bot_analysis = None   # résultats de la dernière analyse
+    st.session_state.bot_analysis = None   #résultats de la dernière analyse
 if "bot_order_done" not in st.session_state:
     st.session_state.bot_order_done = False
 
-# ── En-tête ───────────────────────────────────────────────────────────────────
+#En-tête
 st.title("🤖 Bot de Trading Automatique")
 st.caption(
     "Choisis un actif et une stratégie, clique sur **Analyser** pour obtenir un rapport complet, "
     "puis autorise ou non l'exécution de l'ordre."
 )
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+#Configuration
 col1, col2 = st.columns(2)
 with col1:
     bot_asset = st.selectbox("Actif à trader", list(data_mod.MARKET.keys()), key="bot_asset_sel")
@@ -67,7 +67,7 @@ with col2:
         key="bot_strat_sel",
     )
 
-# Mappage label → code interne
+#Mappage label → code interne
 if "SMA" in bot_strat_label:
     bot_strat = "SMA"
     st.info(
@@ -95,7 +95,7 @@ else:
 
 st.divider()
 
-# ── Bouton Analyser ───────────────────────────────────────────────────────────
+#Bouton Analyser
 if st.button("🔍 Analyser", type="primary", use_container_width=True):
     st.session_state.bot_order_done = False
     st.session_state.bot_analysis = None
@@ -113,12 +113,12 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
             close = df["Close"]
             current_price = float(close.iloc[-1])
 
-            # ── Calcul de la volatilité annualisée ────────────────────────────
+            #Calcul de la volatilité annualisée
             returns = close.pct_change().dropna()
-            volatility = float(returns.std() * np.sqrt(252) * 100)  # en %
+            volatility = float(returns.std() * np.sqrt(252) * 100)  #en %
 
-            # ── Calcul des indicateurs selon la stratégie ─────────────────────
-            signal = 0        # 0 = NEUTRE, 1 = ACHAT, -1 = VENTE
+            #Calcul des indicateurs selon la stratégie
+            signal = 0        #0 = NEUTRE, 1 = ACHAT, -1 = VENTE
             indicators = {}
             ml_prob_up = None
 
@@ -141,30 +141,27 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                     signal = -1
 
             elif bot_strat == "VWAP":
-                # ────────────────────────────────────────────────────────────
-                # STRATÉGIE VWAP (Volume Weighted Average Price)
-                # ────────────────────────────────────────────────────────────
-                # Le VWAP est le prix d'équilibre d'une journée selon les volumes.
-                # On calcule ici un VWAP glissant sur 20 jours en utilisant
-                # le prix typique (High + Low + Close) / 3 pondéré par le volume.
-                # ────────────────────────────────────────────────────────────
+                #STRATÉGIE VWAP (Volume Weighted Average Price)
+                #Le VWAP est le prix d'équilibre d'une journée selon les volumes.
+                #On calcule ici un VWAP glissant sur 20 jours en utilisant
+                #le prix typique (High + Low + Close) / 3 pondéré par le volume.
                 window_vwap = 20
                 if "High" in df.columns and "Low" in df.columns and "Volume" in df.columns:
-                    # Prix typique = (High + Low + Close) / 3
+                    #Prix typique = (High + Low + Close) / 3
                     typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
-                    # VWAP glissant : somme(prix_typique * volume) / somme(volume)
+                    #VWAP glissant : somme(prix_typique * volume) / somme(volume)
                     cum_tp_vol = (typical_price * df["Volume"]).rolling(window_vwap).sum()
                     cum_vol    = df["Volume"].rolling(window_vwap).sum()
                     vwap_val   = float((cum_tp_vol / cum_vol).iloc[-1])
                 else:
-                    # Fallback si données OHLCV manquantes : VWAP = SMA20
+                    #Fallback si données OHLCV manquantes : VWAP = SMA20
                     vwap_val = float(sim.calculate_sma(close, window_vwap).iloc[-1])
 
                 deviation_pct = ((current_price - vwap_val) / vwap_val) * 100
                 indicators["VWAP (20j)"]    = f"{vwap_val:.2f} €"
                 indicators["Écart au VWAP"] = f"{deviation_pct:+.2f} %"
 
-                # Signal : achat si cours > 2% sous le VWAP, vente si > 2% au-dessus
+                #Signal : achat si cours > 2% sous le VWAP, vente si > 2% au-dessus
                 if current_price < vwap_val * 0.98:
                     signal = 1
                 elif current_price > vwap_val * 1.02:
@@ -173,8 +170,8 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                     signal = 0
 
             elif bot_strat == "ML_RF":
-                # ── 1. Grid Search C++ : SMA & RSI ──────────────────────────────
-                # Optimise les fenêtres SMA et RSI via le moteur C++ (rapide).
+                #1. Grid Search C++ : SMA & RSI
+                #Optimise les fenêtres SMA et RSI via le moteur C++ (rapide).
                 import finance.finance as fin_mod
                 prices_list = close.tolist()
                 with st.spinner("🔧 Grid Search C++ : SMA & RSI…"):
@@ -183,17 +180,17 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
 
                 add_log(f"Grid Search → SMA opt: {best_short}/{best_long} | RSI opt: w={best_rsi_w} (S:{best_os}, A:{best_ob})")
 
-                # ── 2. Grid Search Python : Fenêtre VWAP optimale ──────────────────
-                # On cherche la fenêtre VWAP (de 5 à 60 jours) qui maximise la
-                # corrélation absolue entre le signal "distance au VWAP" et le
-                # rendement futur à 3 jours. C'est un proxy rapide de la capacité
-                # prédictive du VWAP glissant pour cet actif spécifique.
-                best_vwap_w = 20       # valeur par défaut
+                #2. Grid Search Python : Fenêtre VWAP optimale
+                #On cherche la fenêtre VWAP (de 5 à 60 jours) qui maximise la
+                #corrélation absolue entre le signal "distance au VWAP" et le
+                #rendement futur à 3 jours. C'est un proxy rapide de la capacité
+                #prédictive du VWAP glissant pour cet actif spécifique.
+                best_vwap_w = 20       #valeur par défaut
                 best_vwap_corr = -1.0
 
-                future_ret3 = close.pct_change(3).shift(-3)  # rendement sur 3j en avance
+                future_ret3 = close.pct_change(3).shift(-3)  #rendement sur 3j en avance
 
-                for vw in range(5, 61, 5):   # test de 5 à 60 jours, pas de 5
+                for vw in range(5, 61, 5):   #test de 5 à 60 jours, pas de 5
                     if "High" in df.columns and "Low" in df.columns and "Volume" in df.columns:
                         tp  = (df["High"] + df["Low"] + df["Close"]) / 3
                         vwap_candidate = (
@@ -201,10 +198,10 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                             / df["Volume"].rolling(vw).sum()
                         )
                     else:
-                        vwap_candidate = close.rolling(vw).mean()  # fallback SMA
+                        vwap_candidate = close.rolling(vw).mean()  #fallback SMA
 
                     vwap_dist_candidate = ((close - vwap_candidate) / vwap_candidate).dropna()
-                    # Corrélation de Pearson entre distance VWAP et rendement 3j
+                    #Corrélation de Pearson entre distance VWAP et rendement 3j
                     try:
                         corr = abs(float(vwap_dist_candidate.corr(future_ret3)))
                         if corr > best_vwap_corr and not np.isnan(corr):
@@ -215,20 +212,20 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
 
                 add_log(f"Grid Search VWAP → fenêtre optimale = {best_vwap_w}j (corr={best_vwap_corr:.3f})")
 
-                # ── 3. Feature Engineering avec tous les paramètres optimisés ──────
+                #3. Feature Engineering avec tous les paramètres optimisés
                 ret1 = close.pct_change()
                 ret3 = close.pct_change(3)
                 ret5 = close.pct_change(5)
 
-                # SMA ratio optimisé par C++
+                #SMA ratio optimisé par C++
                 sma_short_s = sim.calculate_sma(close, best_short)
                 sma_long_s  = sim.calculate_sma(close, best_long)
                 sma_ratio   = sma_short_s / sma_long_s
 
-                # RSI optimisé par C++
+                #RSI optimisé par C++
                 rsi_opt = sim.calculate_rsi(close, best_rsi_w)
 
-                # VWAP distance optimisée par grid search Python
+                #VWAP distance optimisée par grid search Python
                 if "High" in df.columns and "Low" in df.columns and "Volume" in df.columns:
                     tp_opt   = (df["High"] + df["Low"] + df["Close"]) / 3
                     vwap_opt = (
@@ -237,18 +234,18 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                     )
                 else:
                     vwap_opt = close.rolling(best_vwap_w).mean()
-                vwap_dist = (close - vwap_opt) / vwap_opt  # distance relative au VWAP
+                vwap_dist = (close - vwap_opt) / vwap_opt  #distance relative au VWAP
 
                 vol10 = ret1.rolling(10).std()
 
-                # 7 features : ret1, ret3, ret5, sma_ratio, rsi, vwap_dist, vol10
+                #7 features : ret1, ret3, ret5, sma_ratio, rsi, vwap_dist, vol10
                 features = pd.DataFrame({
                     "ret1":      ret1,
                     "ret3":      ret3,
                     "ret5":      ret5,
                     "sma_ratio": sma_ratio,
                     "rsi":       rsi_opt,
-                    "vwap_dist": vwap_dist,  # ← nouvelle feature VWAP
+                    "vwap_dist": vwap_dist,  #← nouvelle feature VWAP
                     "vol10":     vol10,
                 })
                 target  = (close.shift(-3) > close).astype(int)
@@ -269,12 +266,12 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 from sklearn.model_selection import StratifiedKFold, cross_val_score
                 clf_base = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
 
-                # Cross-validation anti-overfitting
+                #Cross-validation anti-overfitting
                 cv        = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
                 cv_scores = cross_val_score(clf_base, X_train, y_train, cv=cv, scoring='accuracy')
                 add_log(f"CV 5-Folds: précision = {cv_scores.mean()*100:.1f}% ± {cv_scores.std()*100:.1f}%")
 
-                # Calibration Platt Scaling
+                #Calibration Platt Scaling
                 clf = CalibratedClassifierCV(estimator=clf_base, method='sigmoid', cv=5)
                 clf.fit(X_train, y_train)
 
@@ -282,7 +279,7 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 prob       = clf.predict_proba(latest)[0]
                 ml_prob_up = float(prob[1] * 100)
 
-                # Indicateurs affichés
+                #Indicateurs affichés
                 vwap_dist_now = float(vwap_dist.iloc[-1]) * 100
                 indicators["Probabilité de hausse (3j)"]      = f"{ml_prob_up:.1f} %"
                 indicators[f"SMA({best_short}/{best_long})"]   = f"{float(sma_short_s.iloc[-1]):.2f} €"
@@ -296,7 +293,7 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                 else:
                     signal = 0
 
-            # ── Calcul de l'action proposée ─────────────────────────────────
+            #Calcul de l'action proposée
             prix_avec_comm = current_price * 1.01
             cash_dispo = p.cash
 
@@ -333,7 +330,7 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
                     f"Mieux vaut conserver tes liquidités pour le moment."
                 )
 
-            # Sauvegarde dans la session
+            #Sauvegarde dans la session
             st.session_state.bot_analysis = {
                 "asset": bot_asset,
                 "strat": bot_strat,
@@ -353,7 +350,7 @@ if st.button("🔍 Analyser", type="primary", use_container_width=True):
             st.error(f"❌ Erreur lors de l'analyse : {e}")
             add_log(f"Erreur analyse : {e}")
 
-# ── Affichage du rapport ───────────────────────────────────────────────────────
+#Affichage du rapport
 analysis = st.session_state.get("bot_analysis")
 
 if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_strat:
@@ -369,19 +366,19 @@ if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_stra
     with st.expander(
         f"📊 Rapport d'analyse — {bot_asset} ({bot_strat_label})", expanded=True
     ):
-        # Signal principal et Explication Narrative du Bot
+        #Signal principal et Explication Narrative du Bot
         st.markdown(
             f"### Signal détecté : {SIGNAL_COLORS[signal]} **{SIGNAL_LABELS[signal]}**"
         )
         st.info(analysis["explanation"])
 
-        # Indicateurs
+        #Indicateurs
         st.markdown("#### 📐 Indicateurs techniques")
         ind_cols = st.columns(len(indicators) if indicators else 1)
         for i, (k, v) in enumerate(indicators.items()):
             ind_cols[i].metric(k, v)
 
-        # Cours & volatilité
+        #Cours & volatilité
         st.markdown("#### 💹 Cours & Risque")
         c1, c2 = st.columns(2)
         c1.metric("Cours actuel", f"{price:.2f} €")
@@ -391,7 +388,7 @@ if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_stra
             help="Calculée sur les rendements journaliers annualisés (√252). Représente le risque historique de l'actif.",
         )
 
-        # Action proposée
+        #Action proposée
         st.markdown("#### 📋 Action proposée")
         if signal == 1 and proposed and proposed["qty"] > 0:
             st.success(
@@ -411,7 +408,7 @@ if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_stra
         else:
             st.info("Aucune transaction conseillée. Le marché est en phase neutre pour cet actif.")
 
-    # ── Boutons d'autorisation ─────────────────────────────────────────────────
+    #Boutons d'autorisation
     if not st.session_state.bot_order_done:
         if signal == 1 and proposed and proposed["qty"] > 0:
             if st.button(
@@ -458,7 +455,7 @@ if analysis and analysis["asset"] == bot_asset and analysis["strat"] == bot_stra
     else:
         st.success("✅ Ordre déjà exécuté pour cette analyse. Lance une nouvelle analyse pour continuer.")
 
-# ── Console de logs ───────────────────────────────────────────────────────────
+#Console de logs
 st.divider()
 st.subheader("📋 Console de trading")
 col_log, col_clr = st.columns([5, 1])

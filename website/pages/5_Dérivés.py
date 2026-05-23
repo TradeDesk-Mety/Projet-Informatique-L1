@@ -23,7 +23,7 @@ if not st.session_state.get("logged_in", False):
 st.title("Dérivés — Pricing d'Options & Greeks")
 st.caption("Modélisation du prix d'une option européenne (Call / Put) selon le modèle Black-Scholes (1973).")
 
-# ── Paramètres ────────────────────────────────────────────────────────────────
+#Paramètres
 st.markdown("### Paramètres du modèle")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -43,7 +43,7 @@ with col6:
 
 st.divider()
 
-# ── Calcul du prix + Greeks ───────────────────────────────────────────────────
+#Calcul du prix + Greeks
 opt_key = opt_type.lower()
 try:
     price = grk.black_scholes_pricing(S, K, T, r, sigma, opt_key)
@@ -51,7 +51,7 @@ try:
 
     st.markdown("### Prix théorique & Greeks")
 
-    # Ligne 1 : Prix + Delta + Gamma
+    #Ligne 1 : Prix + Delta + Gamma
     c1, c2, c3 = st.columns(3)
     c1.metric(
         f"Prix {opt_type}",
@@ -69,7 +69,7 @@ try:
         help="Taux de variation du Delta. Mesure la courbure de la position."
     )
 
-    # Ligne 2 : Theta + Vega + Rho
+    #Ligne 2 : Theta + Vega + Rho
     c4, c5, c6 = st.columns(3)
     c4.metric(
         "Theta (Θ)",
@@ -118,7 +118,7 @@ except Exception as e:
 
 st.divider()
 
-# ── Onglets ───────────────────────────────────────────────────────────────────
+#Onglets
 tab_3d, tab_smile, tab_sens = st.tabs(["Surface 3D", "Volatility Smile", "Sensibilité des Greeks"])
 
 with tab_3d:

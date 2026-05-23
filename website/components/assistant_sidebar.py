@@ -435,7 +435,7 @@ def generate_response(query: str, p) -> str:
         "valeur", "capital"
     ]
     if any(w in q for w in portfolio_triggers):
-        # Détection si l'utilisateur demande la liste des portefeuilles
+        #Détection si l'utilisateur demande la liste des portefeuilles
         if any(w in q for w in ["mes portefeuilles", "liste", "combien de portefeuille", "tous mes"]):
             try:
                 import streamlit as st
@@ -456,7 +456,7 @@ def generate_response(query: str, p) -> str:
             except Exception:
                 pass
 
-        # Portefeuille actif
+        #Portefeuille actif
         total_value = p.cash
         for t, info in p.positions.items():
             total_value += info["quantity"] * info["avg_price"]
@@ -470,7 +470,7 @@ def generate_response(query: str, p) -> str:
 
         perf_emoji = "📈" if perf >= 0 else "📉"
 
-        # Nom du portefeuille actif depuis session
+        #Nom du portefeuille actif depuis session
         try:
             import streamlit as st
             active_label = st.session_state.get("active_portfolio_label", "Principal")

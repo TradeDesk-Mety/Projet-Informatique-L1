@@ -1,16 +1,14 @@
 """
 equities.py — Gestion du portefeuille de trading (Positions, transactions, PAMP)
-=============================================================================
 
 Ce module définit la classe `Portfolio` qui modélise le portefeuille de paper trading.
 
 Relations avec les autres modules :
-----------------------------------
 - finance.py (C++) : utilisé pour calculer le coût net d'achat, le montant net reçu à la vente,
-  les commissions de courtage (1%), et le ROI global.
+  les commissions de courtage (1%), et le ROI global
 - database.py : fournit la connexion SQLite pour persister l'état du portefeuille.
 - web.py & pages : manipulent l'objet `Portfolio` stocké en session pour exécuter les ordres,
-  afficher les positions et sauvegarder l'état de l'utilisateur connecté.
+  afficher les positions et sauvegarder l'état de l'utilisateur connecté
 """
 
 import json
@@ -27,8 +25,8 @@ class Portfolio:
 
     def buy(self, ticker: str, quantity: float, price: float) -> str:
         """
-        Achète un actif (action, ETF ou option).
-        Calcule le coût total net (brut + commission) avec le moteur C++.
+        Achète un actif (action, ETF ou option)
+        Calcule le coût total net (brut + commission) avec le moteur C++
         """
         if quantity <= 0:
             return "La quantité doit être strictement positive."
@@ -36,7 +34,6 @@ class Portfolio:
             return "Le prix doit être strictement positif."
 
         try:
-            # Calcul du coût net d'achat via C++ (brut + commission de 1%)
             total_net = fin.total_net_achat(quantity, price)
             commission = fin.calculer_commission(price, quantity)
         except Exception as e:
@@ -45,14 +42,12 @@ class Portfolio:
         if self.cash < total_net:
             return f"Fonds insuffisants. Requis: {total_net:.2f} €, Disponible: {self.cash:.2f} €"
 
-        # Déduction du cash
         self.cash -= total_net
 
         # Mise à jour des positions
         if ticker in self.positions:
             pos = self.positions[ticker]
             new_qty = pos["quantity"] + quantity
-            # Calcul du prix d'achat moyen pondéré (PAMP)
             new_avg = ((pos["quantity"] * pos["avg_price"]) + (quantity * price)) / new_qty
             self.positions[ticker] = {"quantity": new_qty, "avg_price": new_avg}
         else:
@@ -73,8 +68,8 @@ class Portfolio:
 
     def sell(self, ticker: str, quantity: float, price: float) -> str:
         """
-        Vend un actif (action, ETF ou option).
-        Calcule le montant net reçu (brut - commission) avec le moteur C++.
+        Vend un actif (action, ETF ou option)
+        Calcule le montant net reçu (brut - commission) avec le moteur C++
         """
         if quantity <= 0:
             return "La quantité doit être strictement positive."
@@ -86,21 +81,19 @@ class Portfolio:
             return f"Quantité insuffisante en portefeuille. Disponible: {available}."
 
         try:
-            # Calcul du montant net de la vente via C++ (brut - commission de 1%)
             total_net = fin.total_net_vente(quantity, price)
             commission = fin.calculer_commission(price, quantity)
         except Exception as e:
             return f"Erreur lors des calculs financiers : {e}"
 
-        # Ajout au cash
         self.cash += total_net
 
-        # Mise à jour des positions
+        #MAJ des positions
         self.positions[ticker]["quantity"] -= quantity
         if self.positions[ticker]["quantity"] == 0:
             del self.positions[ticker]
 
-        # Enregistrement de la transaction
+        #Enregistrement transaction
         trade = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "type": "VENTE",
@@ -126,13 +119,12 @@ class Portfolio:
 
     def get_total_performance(self, current_prices: dict) -> float:
         """
-        Calcule la performance globale en pourcentage (ROI).
+        Calcule la performance globale en pourcentage (ROI)
         """
         total_val = self.get_portfolio_value(current_prices)
         if self.initial_cash <= 0:
             return 0.0
         try:
-            # Utilisation du moteur C++ pour calculer le ROI %
             return fin.calculer_performance(self.initial_cash, total_val)
         except Exception:
             return ((total_val - self.initial_cash) / self.initial_cash) * 100.0
@@ -152,14 +144,14 @@ class Portfolio:
         self.transactions = data.get("transactions", [])
 
     def save_to_db(self, user_id: int = 1, portfolio_id: int = 1, db_path: str = None):
-        """Sauvegarde l'état du portefeuille pour un utilisateur et un portefeuille spécifiques."""
+        """Sauvegarde l'état du portefeuille pour un utilisateur et un portefeuille spécifiques"""
         from data.database import get_portfolio_connection
 
         conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
 
-            # 1. Sauvegarde du solde cash (UPSERT — évite toute UniqueViolation)
+            #Sauvegarde du solde cash
             cursor.execute("""
                 INSERT INTO portfolio_state (user_id, portfolio_id, cash, initial_cash)
                 VALUES (%s, %s, %s, %s)
@@ -167,7 +159,7 @@ class Portfolio:
                 DO UPDATE SET cash = EXCLUDED.cash, initial_cash = EXCLUDED.initial_cash
             """, (user_id, portfolio_id, self.cash, self.initial_cash))
 
-            # 2. Sauvegarde des positions
+            #Sauvegarde des positions
             cursor.execute(
                 "DELETE FROM portfolio_positions WHERE user_id = %s AND portfolio_id = %s",
                 (user_id, portfolio_id)
@@ -178,7 +170,7 @@ class Portfolio:
                     (user_id, portfolio_id, ticker, pos["quantity"], pos["avg_price"])
                 )
 
-            # 3. Sauvegarde de l'historique des transactions
+            #Sauvegarde de l'historique
             cursor.execute(
                 "DELETE FROM portfolio_transactions WHERE user_id = %s AND portfolio_id = %s",
                 (user_id, portfolio_id)
@@ -198,14 +190,14 @@ class Portfolio:
             conn.close()
 
     def load_from_db(self, user_id: int = 1, portfolio_id: int = 1, db_path: str = None):
-        """Charge l'état du portefeuille d'un utilisateur et d'un portefeuille spécifiques."""
+        """Charge l'état du portefeuille d'un utilisateur et d'un portefeuille spécifiques"""
         from data.database import get_portfolio_connection
 
         conn = get_portfolio_connection()
         try:
             cursor = conn.cursor()
 
-            # 1. Chargement du cash
+            #Chargement du cash
             cursor.execute(
                 "SELECT cash, initial_cash FROM portfolio_state WHERE user_id = %s AND portfolio_id = %s",
                 (user_id, portfolio_id)
@@ -215,7 +207,7 @@ class Portfolio:
                 self.cash = row[0]
                 self.initial_cash = row[1]
 
-            # 2. Chargement des positions
+            #Chargement des positions
             cursor.execute(
                 "SELECT asset, quantity, avg_price FROM portfolio_positions WHERE user_id = %s AND portfolio_id = %s",
                 (user_id, portfolio_id)
@@ -224,7 +216,7 @@ class Portfolio:
             for row in cursor.fetchall():
                 self.positions[row[0]] = {"quantity": float(row[1]), "avg_price": float(row[2])}
 
-            # 3. Chargement des transactions
+            #Chargement des transactions
             cursor.execute(
                 "SELECT timestamp, type, asset, quantity, price, commission, total_net "
                 "FROM portfolio_transactions WHERE user_id = %s AND portfolio_id = %s ORDER BY id ASC",

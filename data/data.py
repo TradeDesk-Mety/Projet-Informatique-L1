@@ -9,7 +9,7 @@ PERIODES_VALIDES = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "y
 INTERVALLES_VALIDES = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
 
 
-# dictionnaire contennant les actions et indices
+#Dictionnaire contennant les actions et indices
 MARKET = {
     # ====================================================
     # --- ACTIONS AMÉRICAINES (500 ENTREPRISES) ---
@@ -1049,7 +1049,7 @@ MARKET = {
 # ── Ensemble des cryptomonnaies disponibles ───────────────────────────────────
 CRYPTO_ASSETS: set = {k for k, v in MARKET.items() if v.endswith("-USD") and "-" in v}
 
-# Suffixes d'exchanges européens (actifs cotés en EUR/GBP/CHF...)
+#Suffixes d'exchanges européens (actifs cotés en EUR/GBP/CHF...)
 _EU_SUFFIXES = {
     ".PA", ".BR", ".AS", ".MI", ".MC", ".DE", ".L", ".SW",
     ".ST", ".CO", ".OL", ".HE", ".LS", ".VI", ".PR", ".WA",
@@ -1105,7 +1105,7 @@ def verifier_action(action_choisie)->bool :
     return action_choisie in MARKET
     
 #Récupération de l'historique d'une action en fonction de sa période (temps total) et de son intervalle (temps à laquelle il prend les bougies sur la période)
-# Récupération de l'historique d'une action
+#Récupération de l'historique d'une action
 @st.cache_data(ttl=60)
 def recuperer_historique(action_choisie, periode : str, intervalle : str, force_download: bool = False)-> pd.DataFrame:
     if not verifier_action(action_choisie):

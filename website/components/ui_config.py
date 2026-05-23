@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 def set_global_ui():
-    # Application du CSS pour cacher les flèches, unifier les couleurs et améliorer le design
+    #Application du CSS pour cacher les flèches, unifier les couleurs et améliorer le design
     st.markdown("""
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -199,7 +199,7 @@ def set_global_ui():
     </style>
     """, unsafe_allow_html=True)
     
-    # Affichage du footer global
+    #Affichage du footer global
     st.markdown("""
         <div class="footer">
             © 2026 TradeDesk |
@@ -209,7 +209,7 @@ def set_global_ui():
         </div>
     """, unsafe_allow_html=True)
 
-    # Affichage du logo en haut de la barre latérale s'il existe
+    #Affichage du logo en haut de la barre latérale s'il existe
     logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "logo.png"))
     if os.path.exists(logo_path):
         st.sidebar.image(logo_path, use_column_width=True)

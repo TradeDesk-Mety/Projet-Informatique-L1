@@ -62,7 +62,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 1. Base de données Bronze (données brutes d'historique de prix)
+    #1.Base de données Bronze (données brutes d'historique de prix)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS bronze_prices (
         asset TEXT,
@@ -76,7 +76,7 @@ def init_db():
     )
     """)
     
-    # 2. Base de données Silver (données nettoyées et enrichies d'indicateurs)
+    # 2.Base de données Silver (données nettoyées et enrichies d'indicateurs)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS silver_prices (
         asset TEXT,
@@ -94,7 +94,7 @@ def init_db():
     )
     """)
     
-    # 3. Base de données Gold (KPIs financiers agrégés)
+    #3.Base de données Gold (KPIs financiers agrégés)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS gold_kpis (
         asset TEXT PRIMARY KEY,
@@ -107,7 +107,7 @@ def init_db():
     )
     """)
     
-    # 4. Table des utilisateurs
+    #4.Table des utilisateurs
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -117,7 +117,7 @@ def init_db():
     )
     """)
     
-    # 5. Table des portefeuilles (support multi-portefeuilles par utilisateur)
+    #5.Table des portefeuilles (support multi-portefeuilles par utilisateur)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolios (
         id SERIAL PRIMARY KEY,
@@ -129,7 +129,7 @@ def init_db():
     )
     """)
 
-    # 6. Table d'état du portefeuille liée à l'utilisateur ET au portefeuille
+    #6.Table d'état du portefeuille liée à l'utilisateur ET au portefeuille
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolio_state (
         user_id INTEGER NOT NULL,
@@ -141,7 +141,7 @@ def init_db():
     )
     """)
 
-    # 7. Table des positions du portefeuille liée à l'utilisateur ET au portefeuille
+    #7.Table des positions du portefeuille liée à l'utilisateur ET au portefeuille
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolio_positions (
         user_id INTEGER NOT NULL,
@@ -154,7 +154,7 @@ def init_db():
     )
     """)
 
-    # 8. Table des transactions du portefeuille liée à l'utilisateur ET au portefeuille
+    #8.Table des transactions du portefeuille liée à l'utilisateur ET au portefeuille
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS portfolio_transactions (
         id SERIAL PRIMARY KEY,
@@ -298,7 +298,7 @@ def rename_portfolio(portfolio_id: int, user_id: int, new_name: str) -> bool:
 
 
 def delete_portfolio(portfolio_id: int, user_id: int) -> bool:
-    """Supprime un portefeuille et toutes ses données. Retourne True si succès."""
+    """Supprime un portefeuille et toutes ses données. Retourne True si succès"""
     conn = get_portfolio_connection()
     try:
         cursor = conn.cursor()
@@ -318,7 +318,7 @@ def delete_portfolio(portfolio_id: int, user_id: int) -> bool:
     finally:
         conn.close()
 
-# Initialisation automatique au chargement du module
+#Initialisation automatique au chargement du module
 try:
     init_db()
 except Exception as e:

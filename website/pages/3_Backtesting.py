@@ -24,7 +24,7 @@ render_assistant()
 st.title("Backtesting — Stratégies Techniques")
 st.caption("Teste tes stratégies de trading sur des données historiques réelles.")
 
-# ── Paramètres ────────────────────────────────────────────────────────────────
+#Paramètres
 col1, col2, col3 = st.columns([2, 1.5, 1.5])
 with col1:
     asset = st.selectbox("Actif à tester", list(data_mod.MARKET.keys()))
@@ -42,7 +42,7 @@ strat_key = "SMA" if "SMA" in strat and "Comparatif" not in strat else (
     "RSI" if "RSI" in strat and "Comparatif" not in strat else (
     "VWAP" if "VWAP" in strat and "Comparatif" not in strat else "CMP"))
 
-# ── Paramètres de la stratégie ────────────────────────────────────────────────
+#Paramètres de la stratégie
 capital_init = st.number_input("Capital initial (€)", 1000, 100000, 10000, step=500, key="capital_init_bt")
 
 params = {}
@@ -65,7 +65,7 @@ elif strat_key == "VWAP":
     with col_p2:
         params["threshold"]   = st.slider("Seuil d'écart (%)", 0.5, 5.0, 1.5, step=0.5,
                                            help="Écart minimum au VWAP pour déclencher un signal (achat si < -seuil%, vente si > +seuil%)")
-else:  # Comparatif
+else:  #Comparatif
     st.info("Mode Comparatif : SMA(20/50) vs RSI(14/30/70) vs VWAP(20j/1.5%) lancés simultanément sur la même période.")
 
 params["initial_cash"] = capital_init
@@ -80,13 +80,13 @@ if run_bt:
             prices  = df_bt["Close"]
 
             if strat_key == "CMP":
-                # Exécution SMA
+                #Exécution SMA
                 params_sma = {"short_window": 20, "long_window": 50, "initial_cash": capital_init}
                 res_sma = sim.backtest_strategy(prices, "SMA", params_sma)
-                # Exécution RSI
+                #Exécution RSI
                 params_rsi = {"rsi_window": 14, "oversold": 30, "overbought": 70, "initial_cash": capital_init}
                 res_rsi = sim.backtest_strategy(prices, "RSI", params_rsi)
-                # Exécution VWAP
+                #Exécution VWAP
                 params_vwap = {"vwap_window": 20, "threshold": 1.5, "initial_cash": capital_init}
                 res_vwap = sim.backtest_strategy(prices, "VWAP", params_vwap, df_ohlcv=df_bt)
 
@@ -116,7 +116,7 @@ if run_bt:
                 if "error" in res:
                     st.error(res["error"])
                 else:
-                    # ── Métriques ──────────────────────────────────────────────
+                    #Métriques
                     col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
                     col_m1.metric("Valeur finale",       f"{res['final_value']:,.2f} €")
                     col_m2.metric("Rendement stratégie", f"{res['strategy_return']:.2f} %")
@@ -128,11 +128,11 @@ if run_bt:
                     st.markdown(f"**Alpha vs Buy & Hold** : `{alpha:+.2f} %` | "
                                 f"**Commissions payées (1%)** : `{res['total_commission']:.2f} €`")
 
-                    # ── Graphique performance ──────────────────────────────────
+                    #Graphique performance
                     st.plotly_chart(vis.plot_backtest_performance(res, f"{strat_key} / {asset}"),
                                     use_container_width=True)
 
-                    # ── Signaux sur le graphique des prix ─────────────────────
+                    #Signaux sur le graphique des prix
                     if "signals" in res and "dates" in res:
                         df_sig = pd.DataFrame({"date": res["dates"], "price": res["prices"],
                                                "signal": res.get("signals", [0]*len(res["dates"]))})
@@ -149,7 +149,7 @@ if run_bt:
                                                    mode="markers", marker=dict(color="#EF5350", size=10, symbol="triangle-down"),
                                                    name="Signal Vente"))
 
-                        # Pour VWAP, on affiche aussi la courbe VWAP sur le graphique des prix
+                        #Pour VWAP, on affiche aussi la courbe VWAP sur le graphique des prix
                         if strat_key == "VWAP" and len(df_bt) == len(df_sig):
                             typical_price = (df_bt["High"] + df_bt["Low"] + df_bt["Close"]) / 3
                             vwap_window   = params.get("vwap_window", 20)

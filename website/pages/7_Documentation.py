@@ -25,9 +25,7 @@ tab_mode_emploi, tab_graphiques, tab_strategies, tab_cours, tab_glossaire = st.t
     "Glossaire",
 ])
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — MODE D'EMPLOI
-# ─────────────────────────────────────────────────────────────────────────────
+#TAB 1 — MODE D'EMPLOI
 with tab_mode_emploi:
     st.header("Mode d'Emploi de la Plateforme TradeDesk")
     st.info(
@@ -226,9 +224,7 @@ L'onglet **Dérivés** permet de pricer des options européennes avec le modèle
 | Rho | 0.2 à 0.6 | + (Call), - (Put) |
 """)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — COMPRENDRE LES GRAPHIQUES
-# ─────────────────────────────────────────────────────────────────────────────
+#TAB 2 — COMPRENDRE LES GRAPHIQUES
 with tab_graphiques:
     st.header("Comprendre les Graphiques de TradeDesk")
     st.info("Cette section explique en détail à quoi sert chaque graphique et comment l'interpréter correctement.")
@@ -486,9 +482,7 @@ Valeur temps            = Prix - Valeur intrinsèque  (toujours ≥ 0)
 ```
 """)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — STRATÉGIES & INDICATEURS
-# ─────────────────────────────────────────────────────────────────────────────
+#TAB 3 — STRATÉGIES & INDICATEURS
 with tab_strategies:
     st.header("Stratégies & Indicateurs Techniques")
     st.write("Comprendre les algorithmes derrière chaque stratégie disponible sur TradeDesk.")
@@ -782,9 +776,7 @@ Si β = 1.5 et le S&P 500 baisse de -10%, votre actif devrait baisser de ~-15%.
 Si le S&P 500 monte de +10%, votre actif devrait monter de ~+15%.
 """)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 4 — COURS DE FINANCE
-# ─────────────────────────────────────────────────────────────────────────────
+#TAB 4 — COURS DE FINANCE
 with tab_cours:
     st.header("Les Bases de la Finance et de l'Investissement")
     st.write("Un cours complet pour comprendre les marchés financiers, du plus simple au plus avancé.")
@@ -1043,9 +1035,7 @@ selon le MBG, puis analyser la distribution des résultats.
 - Extensions : modèles de Heston (volatilité stochastique), Jump-Diffusion de Merton
 """)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 5 — GLOSSAIRE
-# ─────────────────────────────────────────────────────────────────────────────
+#TAB 5 — GLOSSAIRE
 with tab_glossaire:
     st.header("Glossaire Financier")
     st.write("Retrouvez ici la définition rapide de tous les termes utilisés sur TradeDesk.")

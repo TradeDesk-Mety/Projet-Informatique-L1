@@ -1,12 +1,11 @@
 """
 visualisation.py — Bibliothèque de graphiques interactifs (Plotly)
-================================================================
 
 Ce module regroupe l'ensemble des fonctions de tracé de graphiques pour l'application.
 Il utilise Plotly pour générer des figures interactives s'intégrant au thème sombre.
 
 Graphiques disponibles :
------------------------
+
 1. plot_candlestick : graphique multi-panneaux (Chandeliers, volumes colorés, RSI, Bandes de Bollinger).
 2. plot_realtime : graphique en ligne intraday 1 min avec ligne VWAP et volumes.
 3. plot_correlation_heatmap : matrice de corrélation (avec nettoyage automatique des timezones).
@@ -19,7 +18,7 @@ Graphiques disponibles :
 10. plot_volume_breakout [NEW] : graphique mettant en valeur les anomalies de volume.
 
 Relations avec les autres modules :
-----------------------------------
+
 - greeks.greeks : utilise le pricer Black-Scholes pour la surface 3D.
 - Marché.py & Portefeuille.py & Backtesting.py : appellent ces fonctions pour le rendu dans Streamlit.
 """
@@ -41,7 +40,7 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
       - Panneau 2 (18%) : Volume coloré (vert/rouge)
       - Panneau 3 (17%) : RSI(14) avec zones surachat/survente
     """
-    # Robustesse PostgreSQL/yfinance : on force la copie et le renommage en Title Case pour le tracé
+    #Robustesse PostgreSQL/yfinance : on force la copie et le renommage en Title Case pour le tracé
     df = df.copy()
     df.columns = [c.capitalize() for c in df.columns]
 
@@ -57,7 +56,7 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
         subplot_titles=subplot_titles,
     )
 
-    # Chandeliers
+    #Chandeliers
     colors_up   = "#26A69A"
     colors_down = "#EF5350"
     fig.add_trace(go.Candlestick(
@@ -69,13 +68,13 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
         name="Prix",
     ), row=1, col=1)
 
-    # SMA 20 & 50
+    #SMA 20 & 50
     sma20 = df["Close"].rolling(20).mean()
     sma50 = df["Close"].rolling(50).mean()
     fig.add_trace(go.Scatter(x=df.index, y=sma20, line=dict(color="#FFA726", width=1.5), name="SMA 20"), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=sma50, line=dict(color="#42A5F5", width=1.5), name="SMA 50"), row=1, col=1)
 
-    # Bandes de Bollinger (SMA20 ± 2σ)
+    #Bandes de Bollinger (SMA20 ± 2σ)
     std20 = df["Close"].rolling(20).std()
     bb_up = sma20 + 2 * std20
     bb_dn = sma20 - 2 * std20
@@ -88,7 +87,7 @@ def plot_candlestick(df: pd.DataFrame, ticker_name: str, show_volume: bool = Tru
                       for c, o in zip(df["Close"], df["Open"])]
         fig.add_trace(go.Bar(x=df.index, y=df["Volume"], marker_color=vol_colors, name="Volume", opacity=0.7), row=2, col=1)
 
-        # Calcul du RSI(14)
+        #Calcul du RSI(14)
         delta = df["Close"].diff()
         gain  = delta.clip(lower=0).rolling(14).mean()
         loss  = (-delta.clip(upper=0)).rolling(14).mean()
@@ -134,7 +133,7 @@ def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float, y_sc
 
     fig.add_hline(y=current_price, line=dict(color=color, dash="dash", width=1), row=1, col=1)
 
-    # Configuration de l'échelle Y
+    #Configuration de l'échelle Y
     yaxis_config = dict(gridcolor="#1F2937")
     if y_scale_mode == "Zoom serré":
         if not close.empty:
@@ -158,8 +157,6 @@ def plot_realtime(df: pd.DataFrame, ticker_name: str, current_price: float, y_sc
 # ── 3. HEATMAP DE CORRÉLATION (AVEC FIX TIMEZONE) ─────────────────────────────
 def plot_correlation_heatmap(prices_dict: dict) -> go.Figure:
     """ Heatmap de corrélation entre les rendements de plusieurs actifs. """
-    # Correction du bug "tz-naive with tz-aware" :
-    # On force la suppression des fuseaux horaires sur chaque série pour pouvoir les aligner.
     series_clean = {}
     for k, v in prices_dict.items():
         s = v.copy()

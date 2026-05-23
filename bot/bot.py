@@ -1,21 +1,20 @@
 """
 bot.py — Moteur du robot de trading automatique (SMA, RSI, VWAP et Machine Learning)
-=====================================================================================
 
 Ce module définit la classe TradingBot qui exécute périodiquement des algorithmes
 de trading automatique sur le portefeuille de l'utilisateur connecté.
 Il intègre 4 stratégies :
-  1. SMA  : Croisement de Moyennes Mobiles (trend following classique).
-  2. RSI  : Oscillateur surachat/survente (mean reversion).
-  3. VWAP : Prix Moyen Pondéré par Volume (référence institutionnelle).
-  4. ML_RF: Random Forest Classifier avec Grid Search C++ pour l'optimisation.
+  1. SMA  : Croisement de Moyennes Mobiles (trend following classique)
+  2. RSI  : Oscillateur surachat/survente (mean reversion)
+  3. VWAP : Prix Moyen Pondéré par Volume (référence institutionnelle)
+  4. ML_RF: Random Forest Classifier avec Grid Search C++ pour l'optimisation
 
 Relations avec les autres modules :
-----------------------------------
+
 - data.data         : Récupère les historiques de prix depuis Yahoo Finance.
 - simulation.simulation : Calcule les indicateurs techniques (RSI, SMA).
 - equities.equities : Exécute les ordres d'achat/vente sur le portefeuille.
-- 4_🤖_Bot.py       : Contrôle l'état du bot dans l'interface Streamlit.
+- 4_Bot.py       : Contrôle l'état du bot dans l'interface Streamlit.
 """
 
 import time
@@ -29,7 +28,7 @@ import simulation.simulation as sim
 class TradingBot:
     def __init__(self, portfolio: Portfolio, strategy: str = "SMA"):
         self.portfolio = portfolio
-        self.strategy = strategy  # "SMA", "RSI", "VWAP" ou "ML_RF"
+        self.strategy = strategy  
         self.is_running = False
         self.logs = []
 
@@ -44,7 +43,7 @@ class TradingBot:
         self.log(f"Évaluation du marché pour {ticker_name} avec la stratégie {self.strategy}...")
         
         try:
-            # Récupération historique pour calculer l'indicateur
+            #Récupération historique pour calculer l'indicateur
             df = data.recuperer_historique(ticker_name, period, interval)
             if df.empty or len(df) < 10:
                 self.log(f"Données insuffisantes pour {ticker_name}.")
@@ -53,7 +52,7 @@ class TradingBot:
             close_prices = df['Close']
             current_price = close_prices.iloc[-1]
             
-            # Évaluation des signaux
+            #Évaluation des signaux
             signal = 0  # 0 = Hold, 1 = Buy, -1 = Sell
             
             if self.strategy == "SMA":
@@ -171,7 +170,7 @@ class TradingBot:
                 #    - NEUTRE (0) : En cas d'incertitude (entre 45% et 55%), on ne fait rien pour éviter le bruit.
                 # =====================================================================
                 self.log("Entraînement du modèle Random Forest sur l'historique 1 an...")
-                # On utilise un historique plus large pour l'entraînement
+                #On utilise un historique plus large pour l'entraînement
                 df_ml = data.recuperer_historique(ticker_name, "1y", "1d")
                 if len(df_ml) < 40:
                     self.log("Historique 1 an insuffisant pour entraîner le modèle (min 40 jours requis).")
@@ -246,7 +245,7 @@ class TradingBot:
                 # Target : est-ce que le cours est supérieur dans 3 jours (Horizon de 3 jours) ?
                 target = (close_ml.shift(-3) > close_ml).astype(int)
                 
-                # Préparation du dataset
+                #Préparation du dataset
                 dataset = features.copy()
                 dataset["target"] = target
                 dataset = dataset.dropna()
@@ -255,45 +254,45 @@ class TradingBot:
                     self.log("Données nettoyées insuffisantes après retrait des NaNs.")
                     return "Données insuffisantes."
                 
-                # Séparation des variables
+                #Séparation des variables
                 X_train = dataset.drop(columns=["target"])
                 y_train = dataset["target"]
                 
-                # Dernière ligne pour la prédiction en direct (on remplit les NaNs éventuels par précaution)
+                #Dernière ligne pour la prédiction en direct (on remplit les NaNs éventuels par précaution)
                 latest_features = features.iloc[[-1]].ffill().fillna(0.0)
                 
-                # Importation des modules pour l'évaluation et la calibration
+                #Importation des modules pour l'évaluation et la calibration
                 from sklearn.ensemble import RandomForestClassifier
                 from sklearn.model_selection import cross_val_score, StratifiedKFold
                 from sklearn.calibration import CalibratedClassifierCV
                 
-                # 3.1. Modèle de base
+                #3.1. Modèle de base
                 clf_base = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
                 
-                # 3.2. Vérification de l'Overfitting par Cross-Validation
-                # On utilise un StratifiedKFold pour s'assurer que la répartition des hausses/baisses est respectée
+                #3.2. Vérification de l'Overfitting par Cross-Validation
+                #On utilise un StratifiedKFold pour s'assurer que la répartition des hausses/baisses est respectée
                 cv_folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
                 scores = cross_val_score(clf_base, X_train, y_train, cv=cv_folds, scoring='accuracy')
                 acc_mean = scores.mean() * 100
                 acc_std = scores.std() * 100
                 self.log(f"Verification Overfitting (CV 5-Folds): Précision moyenne = {acc_mean:.1f}% (+/- {acc_std:.1f}%)")
                 
-                # 3.3. Algorithme de Calibration (Platt Scaling)
-                # CalibratedClassifierCV vérifie et ajuste la distribution des probabilités du modèle 
-                # pour s'assurer qu'un score de 60% correspond réellement à 60% de chances empiriques.
+                #3.3. Algorithme de Calibration (Platt Scaling)
+                #CalibratedClassifierCV vérifie et ajuste la distribution des probabilités du modèle 
+                #pour s'assurer qu'un score de 60% correspond réellement à 60% de chances empiriques.
                 clf_calibrated = CalibratedClassifierCV(estimator=clf_base, method='sigmoid', cv=5)
                 
-                # Entraînement final du modèle calibré sur l'ensemble des données
+                #Entraînement final du modèle calibré sur l'ensemble des données
                 clf_calibrated.fit(X_train, y_train)
                 
-                # 4. Prédiction et probabilités associées (Fiabilisées par la calibration)
+                #4. Prédiction et probabilités associées (Fiabilisées par la calibration)
                 pred = clf_calibrated.predict(latest_features)[0]
                 prob = clf_calibrated.predict_proba(latest_features)[0]
                 prob_up = prob[1] * 100
                 
                 self.log(f"ML RF: Probabilité de hausse à 3j = {prob_up:.1f}%")
                 
-                # Seuil de décision asymétrique (éviter le bruit)
+                #Seuil de décision asymétrique (éviter le bruit)
                 if pred == 1 and prob_up > 55.0:
                     signal = 1
                 elif pred == 0 or prob_up < 45.0:
@@ -301,9 +300,9 @@ class TradingBot:
                 else:
                     signal = 0
             
-            # Application des ordres
+            #Application des ordres
             if signal == 1:
-                # Signal d'achat : on achète autant que possible
+                #Signal d'achat : on achète autant que possible
                 cash_dispo = self.portfolio.cash
                 if cash_dispo < 10:
                     self.log("Fonds insuffisants pour placer un ordre d'achat.")
@@ -322,7 +321,7 @@ class TradingBot:
                     return "Fonds insuffisants pour acheter 1 unité."
                     
             elif signal == -1:
-                # Signal de vente : on vend tout ce qu'on détient sur cet actif
+                #Signal de vente : on vend tout ce qu'on détient sur cet actif
                 if ticker_name in self.portfolio.positions:
                     qty_to_sell = self.portfolio.positions[ticker_name]["quantity"]
                     self.log(f"Signal VENTE généré. Vente de {qty_to_sell} unités de {ticker_name} à {current_price:.2f} €.")

@@ -26,7 +26,6 @@ username = st.session_state.get("user_username", "Utilisateur")
 st.title("Paramètres du Compte")
 st.caption(f"Connecté en tant que **{username}**")
 
-
 def load_user_info(uid: int) -> dict:
     try:
         conn = get_portfolio_connection()
@@ -40,10 +39,9 @@ def load_user_info(uid: int) -> dict:
         pass
     return {"username": username, "created_at": "—"}
 
-
 user_info = load_user_info(user_id)
 
-# ── Onglets ───────────────────────────────────────────────────────────────────
+#Onglets
 tab_profil, tab_portfolios, tab_pwd, tab_danger = st.tabs([
     "Profil",
     "Mes Portefeuilles",
@@ -51,9 +49,7 @@ tab_profil, tab_portfolios, tab_pwd, tab_danger = st.tabs([
     "Supprimer le Compte",
 ])
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — Profil
-# ═══════════════════════════════════════════════════════════════════════════════
+#TAB 1 — Profil
 with tab_profil:
     st.subheader("Informations du Profil")
 
@@ -80,9 +76,7 @@ with tab_profil:
         "Même les administrateurs ne peuvent pas lire votre mot de passe."
     )
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Mes Portefeuilles
-# ═══════════════════════════════════════════════════════════════════════════════
+#TAB 2 — Mes Portefeuilles
 with tab_portfolios:
     st.subheader("Gestion des Portefeuilles")
     st.caption("Créez plusieurs portefeuilles pour tester différentes stratégies en parallèle.")
@@ -97,7 +91,7 @@ with tab_portfolios:
                 col_a, col_b = st.columns(2)
                 col_a.metric("Capital initial", f"{ptf_initial:,.2f} €")
 
-                # Valeur actuelle depuis session_state si disponible
+                #Valeur actuelle depuis session_state si disponible
                 p_obj = st.session_state.get(f"portfolio_{ptf_id}")
                 if p_obj:
                     tot = p_obj.cash + sum(i["quantity"] * i["avg_price"] for i in p_obj.positions.values())
@@ -127,7 +121,7 @@ with tab_portfolios:
                     if st.button("Supprimer", key=f"btn_del_{ptf_id}", type="primary"):
                         if confirm_del:
                             delete_portfolio(ptf_id, user_id)
-                            # Nettoyer session_state
+                            #Nettoyer session_state
                             if f"portfolio_{ptf_id}" in st.session_state:
                                 del st.session_state[f"portfolio_{ptf_id}"]
                             st.success("Portefeuille supprimé.")
@@ -157,10 +151,7 @@ with tab_portfolios:
             st.success(f"Portefeuille **« {new_ptf_name.strip()} »** créé avec {new_ptf_cash:,.0f} € de capital !")
             st.rerun()
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — Modifier le mot de passe
-# ═══════════════════════════════════════════════════════════════════════════════
+#TAB 3 — Modifier le mot de passe
 with tab_pwd:
     st.subheader("Modifier le Mot de Passe")
     st.caption("Votre mot de passe est haché avec PBKDF2-SHA256 — il ne peut pas être récupéré, seulement réinitialisé.")
@@ -196,9 +187,7 @@ with tab_pwd:
             except Exception as e:
                 st.error(f"Erreur : {e}")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — Supprimer le compte
-# ═══════════════════════════════════════════════════════════════════════════════
+#TAB 4 — Supprimer le compte
 with tab_danger:
     st.subheader("Supprimer mon Compte")
 
