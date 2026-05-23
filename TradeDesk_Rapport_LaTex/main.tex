@@ -25,13 +25,14 @@
 \input{pagedegarde}
 \title{TradeDesk --- Simulateur de Place Boursière}
 \entreprise{Université Paris Nanterre}
-\datedebut{3 février 2026}
+\datedebut{10 mars 2026}
 \datefin{23 mai 2026}
 \membrea{CHABCHOUB Younes --- N\degre{} Étudiant : 45010581}
 \membreb{SAMASSEKOU Mamadou --- N\degre{} Étudiant : 45002539}
 \membrec{DUFOURCQ Timothée --- N\degre{} Étudiant : 45006171}
 \membred{KOSSONOU Élisée --- N\degre{} Étudiant : 45011330}
-\membree{}
+\membree{Dépôt GitHub : \url{https://github.com/TradeDesk-Mety/Projet-Informatique-L1} \newline
+         Application en ligne : \url{https://tradedesk-mety.streamlit.app/}}
 
 \begin{document}
 \pagedegarde
@@ -692,42 +693,319 @@ développement et pourraient faire l'objet de versions futures :
 
     \section{Cahier des charges}
 
-    \subsection*{Objectifs fonctionnels}
+    % ── A.1 Contexte ──────────────────────────────────────────────────────────
+    \subsection*{A.1 Contexte et périmètre du projet}
+
+    Lorsque nous avons débuté ce projet en mars 2026, nous partions d'une
+    question simple : comment apprendre concrètement à investir en bourse
+    sans prendre de risques financiers réels~? La réponse évidente était le
+    \textbf{paper trading} --- simuler des opérations boursières avec un
+    capital fictif, dans les mêmes conditions que les marchés réels.
+
+    C'est de cette idée qu'est né \textbf{TradeDesk}. Plutôt que de
+    développer une application générique, nous avons voulu construire quelque
+    chose qui nous ressemble : une plateforme mêlant la rigueur de la finance
+    quantitative, la puissance du Machine Learning et l'accessibilité d'une
+    interface web moderne.
+
+    L'application couvre l'intégralité du cycle d'un investisseur : se
+    connecter, analyser les marchés, passer des ordres, tester ses
+    stratégies sur l'historique, automatiser ses décisions avec un bot,
+    pricer des produits dérivés et consulter un assistant financier --- le
+    tout sans quitter le navigateur, sans installation, et sans risquer le
+    moindre euro réel.
+
+    % ── A.2 Acteurs ───────────────────────────────────────────────────────────
+    \subsection*{A.2 Acteurs du système}
+
+    TradeDesk a été conçu autour d'un seul type d'utilisateur humain :
+    l'apprenant. Un point important : le système ne prend \textbf{jamais de
+    décisions financières de façon autonome}. Le bot analyse et propose, mais
+    c'est toujours l'utilisateur qui autorise ou refuse l'ordre.
+
+    \begin{table}[h]
+    \centering
+    \begin{tabular}{|>{\bfseries}l|l|p{5.5cm}|}
+    \hline
+    Acteur & Rôle & Droits \\
+    \hline
+    Visiteur & Accède à la page d'accueil sans compte
+             & Création de compte et connexion uniquement \\
+    \hline
+    Utilisateur connecté & Titulaire d'un compte avec capital virtuel
+             & Toutes les fonctionnalités (marché, portefeuille, bot,
+               backtesting, dérivés, assistant, paramètres) \\
+    \hline
+    Système (automatique) & Pipeline Medallion, bot de trading
+             & Lecture/écriture en base de données, exécution des calculs \\
+    \hline
+    \end{tabular}
+    \caption{Acteurs du système TradeDesk}
+    \end{table}
+
+    % ── A.3 Besoins fonctionnels ──────────────────────────────────────────────
+    \subsection*{A.3 Besoins fonctionnels détaillés}
+
+    \subsubsection*{BF1 --- Authentification et gestion de compte}
+
+    L'inscription exige un pseudo unique (minimum 3~caractères), un mot de
+    passe (minimum 4~caractères) saisi deux fois pour éviter les erreurs, et
+    le choix d'un capital de départ fictif compris entre 1~000 et
+    1~000~000~euros. Le mot de passe est haché avec
+    \textbf{PBKDF2-HMAC-SHA256} (100~000~itérations, sel aléatoire de
+    16~octets) avant toute persistance --- aucun mot de passe en clair ne
+    transite dans le système. La comparaison lors de la connexion s'effectue
+    en \textbf{temps constant} (\texttt{hmac.compare\_digest}) pour se
+    protéger contre les attaques par mesure de temps.
+
+    Une fois connecté, l'utilisateur peut modifier son mot de passe,
+    supprimer son compte avec double confirmation, et gérer plusieurs
+    portefeuilles indépendants depuis la page Paramètres.
+
+    \subsubsection*{BF2 --- Analyse de marché en temps réel}
+
+    L'utilisateur peut sélectionner n'importe quel actif parmi plus de
+    \textbf{1~000~disponibles} (actions américaines et européennes, ETF,
+    indices, cryptomonnaies) et l'analyser via six onglets distincts :
+
+    \begin{itemize}
+        \item \textbf{Temps Réel :} graphique du cours sur une période et un
+              intervalle configurables (de~1~minute à~1~semaine), ligne VWAP
+              superposée, jauge RSI animée et sélecteur de date pour
+              revivre n'importe quelle séance passée.
+        \item \textbf{Historique :} chandeliers japonais OHLC avec SMA20,
+              SMA50, Bandes de Bollinger ($\pm 2\sigma$) et volumes colorés
+              (vert/rouge selon la variation).
+        \item \textbf{Volatilité \& Volume :} volatilité annualisée glissante
+              et détection automatique des anomalies de volume
+              (signal quand le volume dépasse $2\times$ sa moyenne sur
+              20~séances).
+        \item \textbf{Statistiques :} Ratio de Sharpe, volatilité annualisée,
+              Bêta vs S\&P~500, Skewness et Kurtosis, recalculés
+              dynamiquement selon la période choisie.
+        \item \textbf{Rendements :} distribution empirique des rendements
+              journaliers comparée à la loi normale ajustée.
+        \item \textbf{Corrélation :} heatmap de Pearson entre actifs
+              sélectionnés librement par l'utilisateur.
+    \end{itemize}
+
+    Les actifs cotés en USD sont automatiquement convertis en euros au taux
+    EUR/USD récupéré en temps réel via yfinance.
+
+    \subsubsection*{BF3 --- Gestion du portefeuille (Paper Trading)}
+
+    L'utilisateur peut passer des ordres sur trois catégories d'instruments :
+    \begin{itemize}
+        \item \textbf{Actions et ETF :} quantités entières, cours en temps
+              réel.
+        \item \textbf{Cryptomonnaies :} quantités fractionnaires (ex.
+              0,001~BTC).
+        \item \textbf{Options Call/Put européennes :} pricées selon le modèle
+              Black-Scholes à partir du cours du sous-jacent, du strike,
+              de la maturité (1, 3, 6 ou 12~mois) et de la volatilité
+              historique calculée automatiquement.
+    \end{itemize}
+
+    Une commission de \textbf{1~\%} est appliquée à chaque transaction via le
+    moteur C++. Un récapitulatif (montant brut, commission, montant net) est
+    affiché avant confirmation. Le tableau des positions affiche le Prix
+    d'Achat Moyen Pondéré (PAMP), le cours actuel, la plus ou moins-value
+    latente et le ROI avec coloration dynamique. L'historique est exportable
+    au format CSV. Chaque utilisateur dispose de \textbf{plusieurs
+    portefeuilles indépendants}.
+
+    \subsubsection*{BF4 --- Backtesting de stratégies algorithmiques}
+
+    \begin{table}[h]
+    \centering
+    \begin{tabular}{|>{\bfseries}l|l|l|p{3.5cm}|}
+    \hline
+    Stratégie & Signal d'achat & Signal de vente & Paramètres \\
+    \hline
+    SMA & SMA courte $>$ SMA longue & SMA courte $<$ SMA longue
+        & Fenêtres courte et longue \\
+    \hline
+    RSI & RSI $<$ seuil de survente & RSI $>$ seuil de surachat
+        & Période RSI, seuils \\
+    \hline
+    VWAP & Cours $<$ VWAP & Cours $>$ VWAP
+         & Période de calcul \\
+    \hline
+    \end{tabular}
+    \caption{Stratégies de backtesting disponibles}
+    \end{table}
+
+    Les métriques calculées sont : rendement total, Alpha vs Buy \& Hold,
+    Max Drawdown, nombre d'ordres et commissions cumulées. Un mode comparatif
+    affiche les trois stratégies simultanément. Le \textbf{Grid Search C++}
+    optimise automatiquement les paramètres pour maximiser le rendement
+    historique.
+
+    \subsubsection*{BF5 --- Bot de trading algorithmique}
+
+    Le bot analyse un actif et génère un signal (Achat / Vente / Neutre)
+    selon quatre modes :
     \begin{enumerate}
-        \item \textbf{Authentification :} inscription avec pseudo unique et
-              mot de passe haché, connexion, déconnexion, suppression de
-              compte, changement de mot de passe.
-        \item \textbf{Paper Trading :} achat et vente d'actions, ETF,
-              cryptomonnaies et options (Call/Put) avec commission de 1~\%,
-              suivi des positions et de la performance.
-        \item \textbf{Analyse de marché :} données de cours en temps
-              quasi-réel pour 1~000+ actifs, indicateurs techniques (RSI,
-              MACD, SMA, Bollinger, VWAP), statistiques de risque (Sharpe,
-              Bêta, Drawdown).
-        \item \textbf{Backtesting :} simulation de stratégies SMA, RSI, VWAP
-              sur données historiques avec métriques de performance.
-        \item \textbf{Bot de trading :} analyse automatisée avec 4
-              stratégies dont Machine Learning, validation explicite avant
-              tout ordre.
-        \item \textbf{Pricing d'options :} modèle Black-Scholes,
-              visualisation des Greeks et surface 3D.
-        \item \textbf{Assistant :} chatbot financier en langage naturel.
-        \item \textbf{Documentation :} mode d'emploi complet intégré à
-              l'application.
-        \item \textbf{Multi-portefeuilles :} plusieurs portefeuilles
-              indépendants par compte.
+        \item \textbf{Mode SMA :} croisement de moyennes mobiles, paramètres
+              optimisés par Grid Search C++.
+        \item \textbf{Mode RSI :} zones de surachat/survente, paramètres
+              optimisés par Grid Search C++.
+        \item \textbf{Mode VWAP :} positionnement par rapport au prix
+              institutionnel, optimisé par Grid Search Python.
+        \item \textbf{Mode ML :} Random Forest entraîné sur des indicateurs
+              techniques (SMA, RSI, VWAP, rendements), évalué par validation
+              croisée 5~folds et recalibré par Platt Scaling.
     \end{enumerate}
 
-    \subsection*{Contraintes techniques}
+    Le bot produit un \textbf{rapport narratif complet} (signal, niveau de
+    confiance, analyse technique, risque estimé) avant tout ordre.
+    L'utilisateur doit valider explicitement --- le bot ne décide jamais seul.
+
+    \subsubsection*{BF6 --- Pricing d'options et Greeks (page Dérivés)}
+
+    Le modèle \textbf{Black-Scholes (1973)} calcule le prix théorique
+    d'options européennes Call et Put à partir du prix spot, du strike, de la
+    maturité, du taux sans risque et de la volatilité. Les cinq Greeks sont
+    affichés : $\Delta$~(Delta), $\Gamma$~(Gamma), $\nu$~(Vega),
+    $\Theta$~(Thêta), $\rho$~(Rhô). Une surface 3D interactive visualise le
+    prix en fonction du strike et de la maturité.
+
+    \subsubsection*{BF7 --- Assistant financier conversationnel}
+
+    L'assistant comprend les questions en langage naturel, tolère les fautes
+    de frappe (recherche floue via \texttt{difflib}), et couvre plus de
+    \textbf{40~concepts financiers}. Il peut consulter le portefeuille actif,
+    recommander des actifs par Ratio de Sharpe calculé en temps réel,
+    effectuer des calculs mathématiques (ex. \og 5~\% de 2~000~\fg) et
+    afficher le taux EUR/USD du moment.
+
+    \subsubsection*{BF8 --- Documentation intégrée}
+
+    Cinq onglets : Mode d'Emploi, Comprendre les Graphiques, Stratégies \&
+    Indicateurs (formules mathématiques), Cours de Finance accéléré
+    (6~chapitres) et Glossaire (60+~termes consultables).
+
+    % ── A.4 Besoins non fonctionnels ──────────────────────────────────────────
+    \subsection*{A.4 Besoins non fonctionnels}
+
+    \begin{table}[h]
+    \centering
+    \begin{tabular}{|>{\bfseries}l|l|p{4cm}|}
+    \hline
+    Catégorie & Exigence & Cible \\
+    \hline
+    Performance & Chargement d'un graphique (données en cache) & $<$ 3~secondes \\
+    Performance & Calcul d'un backtest sur 1~an & $<$ 5~secondes \\
+    Performance & Pipeline Medallion sur 1~000~actifs & Exécution multi-threadée \\
+    Disponibilité & Accès à l'application & 24h/24, 7j/7 (Streamlit Cloud) \\
+    Sécurité & Stockage des mots de passe & PBKDF2-SHA256, jamais en clair \\
+    Sécurité & Identifiants base de données & Variables d'env., absents du code \\
+    Sécurité & Comparaison des mots de passe & Temps constant (anti timing attack) \\
+    Compatibilité & Navigateurs & Chrome, Firefox, Safari \\
+    Maintenabilité & Architecture du code & Modules séparés par domaine \\
+    Testabilité & Tests unitaires & Couverture des modules critiques \\
+    \hline
+    \end{tabular}
+    \caption{Exigences non fonctionnelles}
+    \end{table}
+
+    % ── A.5 Contraintes ───────────────────────────────────────────────────────
+    \subsection*{A.5 Contraintes techniques et organisationnelles}
+
+    \textbf{Contraintes techniques :}
     \begin{itemize}
-        \item Interface accessible via navigateur web, sans installation
-              côté client.
-        \item Déploiement public sur Streamlit Community Cloud.
-        \item Base de données persistante hébergée dans le cloud.
-        \item Sécurité des mots de passe : hachage PBKDF2-HMAC-SHA256.
-        \item Utilisation du langage Python (obligatoire, enseigné en cours).
-        \item Intégration d'un composant C++ pour les calculs intensifs.
+        \item Python 3.11 obligatoire (langage du cours).
+        \item Interface web uniquement --- pas d'application native.
+        \item Données gratuites via yfinance~: données à la minute
+              disponibles sur 7~jours maximum, données horaires sur 60~jours
+              maximum.
+        \item Moteur C++ compilé dynamiquement (g++ ou clang++) avec
+              recours automatique au calcul Python si le compilateur est
+              absent.
+        \item Dépôt GitHub public requis par Streamlit Community Cloud.
     \end{itemize}
+
+    \textbf{Contraintes organisationnelles :}
+    \begin{itemize}
+        \item Équipe de 4~étudiants --- semestre du 10~mars au 23~mai 2026.
+        \item Utilisation d'outils d'IA comme assistants de programmation
+              (projet de programmation assistée par IA).
+        \item Versionnage Git obligatoire avec revue de code avant toute
+              fusion sur la branche principale.
+    \end{itemize}
+
+    % ── A.6 Priorisation ──────────────────────────────────────────────────────
+    \subsection*{A.6 Priorisation des fonctionnalités}
+
+    \begin{table}[h]
+    \centering
+    \begin{tabular}{|>{\bfseries}l|p{8cm}|>{\bfseries}c|}
+    \hline
+    Priorité & Fonctionnalité & Réalisé \\
+    \hline
+    Indispensable & Authentification sécurisée & Oui \\
+    Indispensable & Paper trading Actions/ETF & Oui \\
+    Indispensable & Visualisation des cours en temps réel & Oui \\
+    Indispensable & Persistance PostgreSQL cloud & Oui \\
+    \hline
+    Important & Backtesting des stratégies SMA, RSI, VWAP & Oui \\
+    Important & Bot de trading avec validation explicite & Oui \\
+    Important & Pricing Black-Scholes et Greeks & Oui \\
+    Important & Conversion EUR/USD automatique & Oui \\
+    \hline
+    Souhaitable & Cryptomonnaies (quantités fractionnaires) & Oui \\
+    Souhaitable & Multi-portefeuilles par compte & Oui \\
+    Souhaitable & Assistant conversationnel & Oui \\
+    Souhaitable & Bot ML (Random Forest + calibration) & Oui \\
+    \hline
+    Hors périmètre & Authentification par e-mail / double facteur & Non \\
+    Hors périmètre & Analyse de sentiment sur actualités & Non \\
+    Hors périmètre & Application mobile native & Non \\
+    \hline
+    \end{tabular}
+    \caption{Priorisation des fonctionnalités}
+    \end{table}
+
+    % ── A.7 Architecture ──────────────────────────────────────────────────────
+    \subsection*{A.7 Architecture cible}
+
+    L'application repose sur quatre couches bien séparées :
+    \begin{description}
+        \item[Présentation] Application web Streamlit (9~pages), rendue
+              côté serveur, accessible depuis n'importe quel navigateur.
+        \item[Métier] Modules Python spécialisés (\texttt{equities.py},
+              \texttt{bot.py}, \texttt{simulation.py}, \texttt{greeks.py})
+              et moteur C++ pour les calculs intensifs (commissions, Grid
+              Search, Black-Scholes).
+        \item[Données] Pipeline Medallion en trois niveaux :
+              Bronze (données OHLCV brutes) $\to$ Silver (SMA, RSI,
+              rendements calculés) $\to$ Gold (Sharpe, Bêta, volatilité
+              agrégés). Exécution multi-threadée via
+              \texttt{ThreadPoolExecutor}.
+        \item[Persistance] PostgreSQL hébergé sur Supabase, 8~tables
+              relationnelles avec clés étrangères et suppression en cascade.
+    \end{description}
+
+    % ── A.8 Livrables ─────────────────────────────────────────────────────────
+    \subsection*{A.8 Livrables}
+
+    \begin{table}[h]
+    \centering
+    \begin{tabular}{|>{\bfseries}l|l|l|}
+    \hline
+    Livrable & Description & Format \\
+    \hline
+    Code source & Application complète versionnée & Dépôt public GitHub \\
+    Application déployée & Instance accessible publiquement
+                         & URL Streamlit Community Cloud \\
+    Rapport de projet & Ce document & PDF \\
+    Suite de tests & Tests unitaires des modules critiques
+                   & Python unittest (\texttt{run\_tests.py}) \\
+    Documentation & Guide intégré à l'application & Page Documentation \\
+    \hline
+    \end{tabular}
+    \caption{Livrables du projet}
+    \end{table}
 
     \section{Exemples d'exécution}
     
