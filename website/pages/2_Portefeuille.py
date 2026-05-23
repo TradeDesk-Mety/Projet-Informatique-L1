@@ -26,7 +26,7 @@ if not st.session_state.get("logged_in", False):
 
 user_id = st.session_state.user_id
 
-#Taux EUR/USD
+# ─── Taux EUR/USD ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def _get_eurusd():
     try:
@@ -36,7 +36,7 @@ def _get_eurusd():
 
 eurusd = _get_eurusd()
 
-#Multi-portefeuilles : initialisation
+# ─── Multi-portefeuilles : initialisation ─────────────────────────────────────
 def _load_portfolios():
     return get_portfolios(user_id)
 
@@ -53,7 +53,7 @@ if not portfolios:
     _ensure_default_portfolio()
     portfolios = _load_portfolios()
 
-#Sélecteur de portefeuille dans la sidebar
+# Sélecteur de portefeuille dans la sidebar
 portfolio_options = {f"{r[1]} (#{r[0]})": r[0] for r in portfolios}
 portfolio_names_list = list(portfolio_options.keys())
 
@@ -94,7 +94,7 @@ with st.sidebar:
             else:
                 st.error("Entrez un nom.")
 
-#Chargement du portefeuille actif
+# ─── Chargement du portefeuille actif ────────────────────────────────────────
 p_key = f"portfolio_{active_portfolio_id}"
 if p_key not in st.session_state:
     p_obj = Portfolio(10000.0)
@@ -103,16 +103,18 @@ if p_key not in st.session_state:
 
 p = st.session_state[p_key]
 
-#Compatibilité : session_state.portfolio pointe toujours sur le portefeuille actif
+# Compatibilité : session_state.portfolio pointe toujours sur le portefeuille actif
 st.session_state.portfolio = p
+
 
 def save():
     p.save_to_db(user_id, active_portfolio_id)
 
+
 st.title("Portefeuille & Ordres")
 st.caption(f"Portefeuille : **{active_portfolio_name}** — Centralisez vos liquidités, surveillez vos positions et passez des ordres.")
 
-#Collecte des sous-jacents détenus
+# ─── Collecte des sous-jacents détenus ───────────────────────────────────────
 held_underlyings = set()
 for pos_ticker in p.positions.keys():
     base = pos_ticker.split("_")[0] if "_" in pos_ticker else pos_ticker
@@ -124,6 +126,7 @@ selected_trade_asset = st.session_state.get(
 assets_to_fetch = held_underlyings.union({selected_trade_asset})
 assets_to_fetch.add("S&P 500 ETF (Tradable)")
 
+
 @st.cache_data(ttl=10)
 def get_prices(assets):
     prices = {}
@@ -134,8 +137,10 @@ def get_prices(assets):
             prices[name] = 0.0
     return prices
 
+
 with st.spinner("Récupération des cours en direct..."):
     mkt = get_prices(frozenset(assets_to_fetch))
+
 
 def to_eur(asset_name: str, price_raw: float) -> float:
     """Convertit un prix brut en EUR si l'actif est coté en USD."""
@@ -143,9 +148,11 @@ def to_eur(asset_name: str, price_raw: float) -> float:
         return price_raw / eurusd
     return price_raw
 
+
 def price_eur(asset_name: str) -> float:
     """Retourne le cours actuel en EUR."""
     return to_eur(asset_name, mkt.get(asset_name, 0.0))
+
 
 def get_current_portfolio_value_and_prices():
     current_prices = {}
@@ -179,11 +186,12 @@ def get_current_portfolio_value_and_prices():
         val += info["quantity"] * current_prices.get(t, info["avg_price"])
     return val, current_prices
 
+
 total_value, real_prices = get_current_portfolio_value_and_prices()
 perf = p.get_total_performance(real_prices)
 valeur_actions = total_value - p.cash
 
-#Métriques principales
+# ─── Métriques principales ────────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Valeur Totale", f"{total_value:,.2f} €")
 c2.metric("Liquidités (Cash)", f"{p.cash:,.2f} €")
@@ -192,12 +200,14 @@ c4.metric("Performance (ROI)", f"{perf:+.2f} %", delta=f"{total_value - p.initia
 
 st.divider()
 
-#Onglets
+# ─── Onglets ──────────────────────────────────────────────────────────────────
 tab_order, tab_pos, tab_hist_tx = st.tabs(
     ["Passer un ordre", "Positions", "Historique"]
 )
 
-#TAB 1 — Passer un ordre
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 1 — Passer un ordre
+# ════════════════════════════════════════════════════════════════════════════
 with tab_order:
     st.subheader("Passer un ordre financier")
     col_l, col_r = st.columns([1.2, 1])
@@ -210,7 +220,7 @@ with tab_order:
         )
         is_buy = trade_type == "Achat"
 
-        #Listes filtrées selon le type d'instrument
+        # ── Listes filtrées selon le type d'instrument ──────────────────────
         all_assets = list(data_mod.MARKET.keys())
         crypto_assets = sorted(data_mod.CRYPTO_ASSETS)
         stock_etf_assets = [a for a in all_assets if a not in data_mod.CRYPTO_ASSETS]
@@ -274,7 +284,7 @@ with tab_order:
                 cur_p = to_eur(trade_asset, raw_price)
             premium = 0.0
 
-            #Note de conversion si actif USD
+            # ── Note de conversion si actif USD ────────────────────────────
             if is_buy and data_mod.is_usd_asset(trade_asset):
                 raw_usd = mkt.get(trade_asset, 0.0)
                 st.caption(
@@ -395,7 +405,9 @@ with tab_order:
                 else:
                     st.error(msg)
 
-#TAB 2 — Positions
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 2 — Positions
+# ════════════════════════════════════════════════════════════════════════════
 with tab_pos:
     st.subheader("Positions en cours")
     if not p.positions:
@@ -457,7 +469,9 @@ with tab_pos:
         fig_pie.update_layout(paper_bgcolor="#0E1117", height=380)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-#TAB 3 — Historique des transactions
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 3 — Historique des transactions
+# ════════════════════════════════════════════════════════════════════════════
 with tab_hist_tx:
     st.subheader("Historique des Transactions")
     if not p.transactions:
