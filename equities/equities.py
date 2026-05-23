@@ -25,7 +25,7 @@ class Portfolio:
         self.transactions = []  # Liste de dictionnaires décrivant les transactions effectuées
         self.initial_cash = float(initial_cash)
 
-    def buy(self, ticker: str, quantity: int, price: float) -> str:
+    def buy(self, ticker: str, quantity: float, price: float) -> str:
         """
         Achète un actif (action, ETF ou option).
         Calcule le coût total net (brut + commission) avec le moteur C++.
@@ -71,7 +71,7 @@ class Portfolio:
         self.transactions.append(trade)
         return "Achat effectué avec succès."
 
-    def sell(self, ticker: str, quantity: int, price: float) -> str:
+    def sell(self, ticker: str, quantity: float, price: float) -> str:
         """
         Vend un actif (action, ETF ou option).
         Calcule le montant net reçu (brut - commission) avec le moteur C++.
@@ -222,7 +222,7 @@ class Portfolio:
             )
             self.positions = {}
             for row in cursor.fetchall():
-                self.positions[row[0]] = {"quantity": int(row[1]), "avg_price": float(row[2])}
+                self.positions[row[0]] = {"quantity": float(row[1]), "avg_price": float(row[2])}
 
             # 3. Chargement des transactions
             cursor.execute(
@@ -236,7 +236,7 @@ class Portfolio:
                     "timestamp": row[0],
                     "type": row[1],
                     "ticker": row[2],
-                    "quantity": int(row[3]),
+                    "quantity": float(row[3]),
                     "price": float(row[4]),
                     "commission": float(row[5]),
                     "total_net": float(row[6])

@@ -147,7 +147,7 @@ def init_db():
         user_id INTEGER NOT NULL,
         portfolio_id INTEGER NOT NULL DEFAULT 1,
         asset TEXT NOT NULL,
-        quantity INTEGER NOT NULL,
+        quantity REAL NOT NULL,
         avg_price REAL NOT NULL,
         PRIMARY KEY (user_id, portfolio_id, asset),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -163,7 +163,7 @@ def init_db():
         timestamp TEXT NOT NULL,
         type TEXT NOT NULL,
         asset TEXT NOT NULL,
-        quantity INTEGER NOT NULL,
+        quantity REAL NOT NULL,
         price REAL NOT NULL,
         commission REAL NOT NULL,
         total_net REAL NOT NULL,
@@ -230,6 +230,14 @@ def init_db():
                 END IF;
             END $$;
         """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    # ── Migration 4 : modifier la colonne quantity en REAL ─────────────────
+    try:
+        cursor.execute("ALTER TABLE portfolio_positions ALTER COLUMN quantity TYPE REAL")
+        cursor.execute("ALTER TABLE portfolio_transactions ALTER COLUMN quantity TYPE REAL")
         conn.commit()
     except Exception:
         conn.rollback()

@@ -30,7 +30,7 @@ inline double normal_cdf(double x) {
 extern "C" {
 
     /* Calcul du montant brut total (quantité * prix) */
-    double total_brut(int nb_trades, double prix) {
+    double total_brut(double nb_trades, double prix) {
         if (nb_trades <= 0 || prix <= 0) {
             return ERROR_CODE;
         }
@@ -47,7 +47,7 @@ extern "C" {
     }
 
     /* Calcul du coût total net lors d'un achat (brut + commission) */
-    double total_net_achat(int nb_trades, double prix_achat) {
+    double total_net_achat(double nb_trades, double prix_achat) {
         if (nb_trades <= 0 || prix_achat <= 0) {
             return ERROR_CODE;
         }
@@ -57,7 +57,7 @@ extern "C" {
     }
     
     /* Calcul du montant net perçu lors d'une vente (brut - commission) */
-    double total_net_vente(int nb_trades, double prix_vente) {
+    double total_net_vente(double nb_trades, double prix_vente) {
         if (nb_trades <= 0 || prix_vente <= 0) {
             return ERROR_CODE;
         }
