@@ -1,0 +1,879 @@
+\documentclass[a4paper, 12pt, twoside]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{ae,aecompl}
+\usepackage[top=2.5cm, bottom=2cm,
+            left=3cm, right=2.5cm,
+            headheight=15pt]{geometry}
+\usepackage{graphicx}
+\usepackage{eso-pic}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{etoolbox}
+\usepackage{calc}
+\usepackage{xurl}
+\urlstyle{same}
+
+\input{pagedegarde}
+\title{TradeDesk --- Simulateur de Place Boursière}
+\entreprise{Université Paris Nanterre}
+\datedebut{3 février 2026}
+\datefin{23 mai 2026}
+\membrea{CHABCHOUB Younes --- N\degre{} Étudiant : 45010581}
+\membreb{SAMASSEKOU Mamadou --- N\degre{} Étudiant : 45002539}
+\membrec{DUFOURCQ Timothée --- N\degre{} Étudiant : 45006171}
+\membred{KOSSONOU Élisée --- N\degre{} Étudiant : 45011330}
+\membree{}
+
+\begin{document}
+\pagedegarde
+
+\section*{Remerciements}
+Nous tenons à remercier Monsieur DELBOT pour son enseignement de l'informatique et l'opportunité de faire ce projet ainsi que Madame SAOULI qui nous a accompagné en travaux dirigés tout le long du second semestre.
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\subsection{Contexte et motivation}
+
+Les marchés financiers sont souvent perçus comme inaccessibles, réservés à des professionnels maîtrisant des outils complexes et des données en temps réel. C'est précisément ce constat qui nous a poussés à développer TradeDesk : un simulateur de place boursière pédagogique permettant à n'importe quel utilisateur d'investir sur plus de 1 000 actifs réels sans risque financier.
+
+Ce projet nous est venu par notre intérêt commun pour les marchés boursiers et par notre Double-Licence Mathématiques-Économie, qui nous a donné envie de combiner les mathématiques financières et l'informatique. L'application offre un capital virtuel choisi à l'inscription, des cours récupérés en temps quasi-réel, des indicateurs techniques (RSI, SMA et VWAP), un moteur de backtesting, un bot de trading algorithmique intégrant du Machine Learning, un pricer d'options Black-Scholes et un assistant financier conversationnel.
+
+Les liens du projet sont les suivants :
+\begin{itemize}
+    \item Dépôt GitHub :
+          \url{https://github.com/TradeDesk-Mety/Projet-Informatique-L1}
+    \item Application en ligne :
+          \url{https://tradedesk-mety.streamlit.app/}
+\end{itemize}
+
+\subsection{Objectifs généraux}
+
+Les objectifs que nous nous sommes fixés en début de projet étaient les
+suivants :
+
+\begin{itemize}
+    \item Développer une interface web professionnelle, accessible depuis
+          un navigateur, sans installation côté utilisateur.
+    \item Implémenter un module d'authentification sécurisé.
+    \item Proposer la visualisation en temps réel des cours boursiers,
+          accompagnée d'indicateurs techniques (RSI, MACD, Bollinger, VWAP).
+    \item Permettre la gestion d'un portefeuille fictif multi-actifs
+          (actions, ETF, options, cryptomonnaies) avec multi-portefeuilles
+          par compte.
+    \item Implémenter un moteur de backtesting permettant d'évaluer les
+          stratégies SMA, RSI et VWAP sur données historiques.
+    \item Développer un bot de trading algorithmique intégrant du Machine
+          Learning (Random Forest) avec optimisation de paramètres via un
+          moteur C++.
+    \item Pricer des options financières européennes grâce au modèle de
+          Black-Scholes.
+    \item Stocker toutes les données utilisateurs dans une base de données.
+\end{itemize}
+
+\section{Environnement de travail}
+
+\subsection{Outils de développement}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|p{0.4\linewidth}|p{0.5\linewidth}|}
+\hline
+\textbf{Outil} & \textbf{Rôle} \\
+\hline
+Visual Studio Code & Éditeur de code principal (extensions Python, Git, C++) \\
+\hline
+GitHub & Hébergement du dépôt, revue de code, gestion des branches \\
+\hline
+Supabase & Gestion des bases de données en ligne \\
+\hline
+Google Docs & Rédaction des notes de conception et du rapport \\
+\hline
+GitHub Codespaces & Environnement de développement cloud \\
+\hline
+Python & Langage de code principal du projet \\
+\hline
+C++ & Langage utilisé pour les calculs mathématiques \\
+\hline
+Streamlit & Framework Python pour applications web interactives \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Outils et technologies utilisés}
+\label{tab:outils}
+\end{table}
+
+\subsection{Organisation de l'équipe}
+
+Nous nous sommes retrouvés à la bibliothèque lorsque cela était
+possible, mais la majorité du projet s'est déroulée lors d'appels sur
+Discord. La répartition du travail s'est déroulée de cette façon :
+
+\begin{itemize}
+    \item Appel vocal pour définir l'idée principale du projet, sa
+          structure, et les langages à utiliser.
+    \item Timothée et Mamadou se sont concentrés sur la logique de
+          trading et d'analyse. Timothée a développé l'intégralité du
+          Bot de trading, y compris le Machine Learning (Random Forest)
+          et le moteur de backtesting, en implémentant l'optimisation
+          des paramètres via le Grid Search en C++. Mamadou s'est chargé
+          de la Page Marché (tous les graphiques Plotly, y compris les
+          chandeliers et les volumes), du calcul des indicateurs
+          techniques (RSI, SMA, Bollinger, VWAP) et des onglets de
+          statistiques associés.
+    \item Younes et Élisée se sont occupés de l'infrastructure et des
+          fonctionnalités utilisateur. Younes a géré l'architecture
+          globale, la base de données (Supabase), la conversion EUR/USD,
+          la page Dérivés (pricing Black-Scholes), les calculs rapides
+          en C++ qui y sont liés, ainsi que l'assistant financier.
+          Élisée a développé la Page Portefeuille (logique d'achat/vente,
+          positions, historique), le système d'authentification
+          (inscription/connexion) et la gestion des portefeuilles
+          utilisateurs.
+    \item L'IA a été utilisée après la création des fonctions et les
+          appels associés.
+    \item Puis nous avons fait un appel vocal général où nous avons
+          corrigé les bugs du site et fait les ajouts de dernière minute
+          pour rendre l'utilisation du site la plus fluide possible.
+\end{itemize}
+
+\section{Description du projet et objectifs}
+
+\subsection{Qu'est-ce que le paper trading ?}
+
+Le paper trading (ou trading fictif) consiste à simuler des opérations
+boursières --- achats et ventes d'actifs financiers --- sans engager de
+capitaux réels. C'est un outil pédagogique largement utilisé par les
+professionnels pour tester des stratégies avant de les appliquer en
+conditions réelles, et par les débutants pour apprendre les mécanismes
+des marchés sans risque financier.
+
+TradeDesk suit cette logique : chaque utilisateur dispose d'un capital
+virtuel qu'il choisit lui-même à l'inscription (de 1~000 à 1~000~000
+euros fictifs), et peut l'investir sur plus de 1~000 actifs réels dont
+les cours sont récupérés en temps quasi-réel.
+
+\subsection{Architecture générale}
+
+Le projet suit une architecture en couches bien séparées, conçue pour
+être maintenable et extensible :
+
+\begin{verbatim}
+Projet-Informatique-L1/
+├── .devcontainer/    -> Configuration GitHub Codespaces
+├── .streamlit/       -> Configuration Streamlit (thème + secrets)
+├── bot/              -> Bot de trading algorithmique
+├── data/             -> Pipeline Medallion + sécurité
+├── equities/         -> Gestion du portefeuille utilisateur
+├── finance/          -> Moteur de calcul C++ + wrapper Python
+├── greeks/           -> Formules Black-Scholes et Greeks
+├── simulation/       -> Backtesting et Monte-Carlo
+├── tests/            -> Suite de tests unitaires
+├── visualisation/    -> Graphiques interactifs Plotly
+├── website/          -> Application web Streamlit
+├── launch.sh         -> Script de lancement Linux/macOS
+├── Lancer_TradeDesk.bat -> Script de lancement Windows
+└── requirements.txt  -> Dépendances Python
+\end{verbatim}
+
+\subsection{Les pages du site web}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|p{0.3\linewidth}|p{0.6\linewidth}|}
+\hline
+\textbf{Page} & \textbf{Fonctionnalité principale} \\
+\hline
+TradeDesk (accueil) & Authentification, inscription \\
+\hline
+Marché & Analyse en temps réel, indicateurs techniques, corrélations \\
+\hline
+Portefeuille & Gestion des ordres, positions, historique, multi-portefeuilles \\
+\hline
+Backtesting & Test des stratégies SMA, RSI, VWAP sur données historiques \\
+\hline
+Bot & Trading algorithmique automatisé (ML inclus) \\
+\hline
+Dérivés & Pricing d'options Black-Scholes, surface 3D, Greeks \\
+\hline
+Assistant & Conseiller financier conversationnel \\
+\hline
+Documentation & Mode d'emploi complet, cours de finance \\
+\hline
+Paramètres & Profil, sécurité, gestion des portefeuilles \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Pages de l'application TradeDesk}
+\label{tab:pages}
+\end{table}
+
+\section{Bibliothèques, Outils et Technologies}
+
+\subsection{Langage principal : Python}
+
+L'intégralité du code applicatif est écrite en Python. Ce choix s'est
+fait naturellement : Python est le langage de référence pour le
+traitement de données financières, et dispose d'un écosystème de
+bibliothèques exceptionnel. De plus, il nous a été enseigné dans notre
+formation dans le cadre du cours Algorithme et Mise en Œuvre
+Informatique.
+
+\subsection{Framework web : Streamlit}
+
+Streamlit est un framework Python open-source permettant de créer des
+applications web interactives sans écrire une seule ligne de HTML ou
+JavaScript. Il transforme des scripts Python en applications web
+réactives grâce à un modèle déclaratif.
+
+Nous avons exploité les fonctionnalités avancées de Streamlit : gestion
+de l'état de session (\texttt{st.session\_state}), cache de données avec
+TTL (\texttt{@st.cache\_data}), colonnes responsives, onglets, métriques,
+formulaires, et injection de CSS personnalisé via
+\texttt{st.markdown(unsafe\_allow\_html=True)}.
+
+\subsection{Données de marché : yfinance}
+
+yfinance est une bibliothèque Python permettant d'accéder gratuitement
+aux données de Yahoo Finance. Elle fournit les historiques OHLCV\footnote{Open, High, Low, Close, Volume --- Prix d'Ouverture, Plus Haut Prix, Plus Bas Prix, Prix de Fermeture et Volume des transactions.},
+les cours en temps quasi-réel et les métadonnées des actifs. Nous avons
+intégré plus de 1~000 actifs dans notre dictionnaire \texttt{MARKET} :
+500 actions américaines, 500 actions européennes (suffixes
+\texttt{.PA}, \texttt{.BR}, \texttt{.MI}\ldots), des ETF, indices et
+cryptomonnaies.
+
+\subsection{Visualisation : Plotly}
+
+Plotly est une bibliothèque de visualisation interactive. Nous avons
+développé 10 types de graphiques personnalisés : chandeliers japonais
+(OHLCV) avec indicateurs superposés, surfaces 3D Black-Scholes, heatmap
+de corrélation, jauge RSI animée, distribution des rendements vs loi
+normale, etc. Tous les graphiques utilisent un thème sombre unifié
+cohérent avec l'interface de l'application.
+
+\subsection{Base de données : PostgreSQL et Supabase}
+
+Les données utilisateurs (comptes, portefeuilles, positions,
+transactions) sont stockées dans une base PostgreSQL hébergée sur
+Supabase (infrastructure cloud), accessible via la bibliothèque
+\texttt{psycopg2}. Le schéma comprend 8 tables relationnelles avec
+contraintes de clé étrangère et cascade de suppression.
+
+\subsection{Moteur de calcul : C++ via ctypes}
+
+Pour les calculs intensifs (Grid Search des paramètres de trading,
+pricing Black-Scholes), nous avons développé un moteur C++ compilé en
+bibliothèque partagée (\texttt{.so} / \texttt{.dylib} / \texttt{.dll})
+et appelé depuis Python via \texttt{ctypes}. La compilation est
+automatique au premier lancement (\texttt{g++} ou \texttt{clang++}).
+Un fallback Python pur est disponible si aucun compilateur n'est détecté.
+
+\subsection{Machine Learning : scikit-learn}
+
+Le bot de trading en mode ML utilise un Random Forest de scikit-learn,
+entraîné sur des features techniques (SMA, RSI, VWAP, rendements). La
+qualité du modèle est évaluée par validation croisée 5-Folds. Les
+probabilités brutes sont recalibrées par Platt Scaling (régression
+logistique) pour corriger le biais des forêts aléatoires sur la sortie
+probabiliste.
+
+\subsection{Sécurité : PBKDF2-HMAC-SHA256}
+
+L'authentification repose sur le hachage des mots de passe avec
+l'algorithme PBKDF2-HMAC-SHA256 de la bibliothèque standard Python
+(\texttt{hashlib}) :
+
+\begin{itemize}
+    \item Sel aléatoire de 16 octets (\texttt{os.urandom(16)}) généré à
+          chaque inscription.
+    \item 100~000 itérations (recommandation NIST 2023).
+    \item Comparaison en temps constant via \texttt{hmac.compare\_digest()}
+          (protection contre les timing attacks).
+\end{itemize}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|p{0.35\linewidth}|p{0.55\linewidth}|}
+\hline
+\textbf{Bibliothèque} & \textbf{Usage} \\
+\hline
+streamlit & Interface web \\
+\hline
+yfinance & Données de marché Yahoo Finance \\
+\hline
+pandas & Manipulation de données tabulaires \\
+\hline
+numpy & Calculs numériques vectorisés \\
+\hline
+plotly & Graphiques interactifs \\
+\hline
+scipy & Loi normale (Black-Scholes) \\
+\hline
+scikit-learn & Machine Learning (Random Forest) \\
+\hline
+psycopg2-binary & Connexion PostgreSQL \\
+\hline
+difflib & Recherche floue dans l'assistant \\
+\hline
+hashlib & Hachage PBKDF2-SHA256 des mots de passe \\
+\hline
+ctypes & Interface C++ $\leftrightarrow$ Python \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Récapitulatif des bibliothèques Python utilisées}
+\label{tab:libs}
+\end{table}
+
+\section{Travail réalisé}
+
+\subsection{Fonctionnalités réalisées}
+
+L'ensemble des fonctionnalités initialement prévues a été implémenté.
+Nous les détaillons ci-dessous par module.
+
+\textbf{Authentification :}
+
+Le système d'authentification permet à un utilisateur de créer un compte
+avec un nom d'utilisateur unique et un mot de passe (vérification de la
+disponibilité du pseudo, confirmation du mot de passe), puis de se
+connecter. Le capital initial fictif est choisi librement à l'inscription
+via un slider (de 1~000 à 1~000~000 euros). Les mots de passe sont
+hachés avec PBKDF2-HMAC-SHA256 avant stockage --- aucun mot de passe en
+clair ne transite dans le système. La session utilisateur est maintenue
+via \texttt{st.session\_state}, avec déconnexion sécurisée.
+
+\textbf{Analyse de marché (page Marché) :}
+
+La page Marché est la plus riche de l'application. Elle propose six
+sous-onglets :
+
+\begin{itemize}
+    \item \textbf{Temps Réel :} Affichage des prix des actifs mis à jour
+          en continu avec sélection de l'intervalle (de la minute à la
+          semaine), indicateur VWAP et jauge RSI animée.
+    \item \textbf{Historique :} Chandeliers japonais avec Bandes de
+          Bollinger et volume coloré selon la direction du marché.
+    \item \textbf{Volatilité \& Volume :} Mesure de la volatilité
+          annualisée en continu, avec alertes en cas de volume
+          exceptionnellement élevé.
+    \item \textbf{Statistiques :} Ratio de Sharpe, volatilité, Bêta
+          (référence S\&P~500), Skewness et Kurtosis, mis à jour
+          instantanément au changement de période.
+    \item \textbf{Rendements :} Distribution réelle des rendements
+          comparée à la loi normale théorique.
+    \item \textbf{Corrélation :} Heatmap Pearson permettant de comparer
+          la co-évolution de plusieurs actifs sélectionnés librement.
+\end{itemize}
+
+Les cours des actifs cotés en USD sont automatiquement convertis en
+euros au taux EUR/USD en temps réel.
+
+\textbf{Gestion du portefeuille (page Portefeuille) :}
+
+\begin{itemize}
+    \item \textbf{Actions / ETF :} Achat ou vente de parts entières
+          d'entreprises ou de paniers d'actifs.
+    \item \textbf{Cryptomonnaies :} Achat de montants très précis,
+          y compris de très petites fractions (par exemple, 0,001 BTC).
+    \item \textbf{Options (Call / Put) :} Contrats donnant le droit
+          d'acheter (Call) ou de vendre (Put) un actif à un prix fixé
+          d'avance (Strike) et à une date future (1, 3, 6 ou 12~mois).
+          Le prix est calculé automatiquement via Black-Scholes.
+\end{itemize}
+
+Une commission fixe de 1~\% est retenue sur chaque transaction. Les
+calculs sont effectués via le moteur C++. Le tableau récapitulatif
+affiche le PAMP, le prix actuel, et les gains/pertes latents avec
+coloration dynamique. L'historique complet est exportable en CSV.
+La fonctionnalité multi-portefeuilles permet de gérer plusieurs comptes
+indépendants, nommables et supprimables.
+
+\textbf{Backtesting (page Backtesting) :}
+
+Le moteur de backtesting simule trois stratégies algorithmiques sur des
+données historiques réelles :
+
+\begin{itemize}
+    \item \textbf{SMA :} Achat/vente sur croisement de moyennes mobiles
+          (Golden Cross).
+    \item \textbf{RSI :} Achat quand l'actif est survendu, vente quand
+          il est suracheté (seuils configurables).
+    \item \textbf{VWAP :} Achat si le prix est inférieur au VWAP, vente
+          s'il le dépasse.
+\end{itemize}
+
+Le système fournit des métriques de performance (gain total, perte
+maximale, etc.) et peut optimiser automatiquement les paramètres via le
+Grid Search en C++.
+
+\textbf{Bot de trading (page Bot) :}
+
+Le bot propose quatre modes de fonctionnement :
+
+\begin{enumerate}
+    \item \textbf{SMA :} Décision basée sur le croisement de moyennes
+          mobiles avec paramètres optimisés automatiquement.
+    \item \textbf{RSI :} Décision basée sur l'indicateur de
+          survente/surachat, paramètres optimisés automatiquement.
+    \item \textbf{VWAP :} Décision par rapport au prix moyen pondéré
+          par les volumes, paramètres optimisés automatiquement.
+    \item \textbf{Machine Learning :} Modèle Random Forest entraîné
+          sur des features techniques, validé par validation croisée
+          5-Folds et calibré par Platt Scaling.
+\end{enumerate}
+
+Avant tout ordre, le bot génère un rapport complet (analyse technique,
+signal détecté, niveau de confiance, risque estimé). Aucun ordre ne peut
+être exécuté sans validation explicite de l'utilisateur.
+
+\textbf{Pricing d'options et Greeks (page Dérivés) :}
+
+La page Dérivés implémente le modèle de Black-Scholes (1973) pour le
+pricing d'options européennes Call et Put. Elle calcule et affiche les
+cinq Greeks :
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|c|c|p{0.5\linewidth}|}
+\hline
+\textbf{Greek} & \textbf{Symbole} & \textbf{Interprétation} \\
+\hline
+Delta & $\Delta$ & Sensibilité au prix du sous-jacent \\
+\hline
+Gamma & $\Gamma$ & Variation du Delta \\
+\hline
+Vega  & $\nu$    & Sensibilité à la volatilité \\
+\hline
+Theta & $\Theta$ & Décroissance temporelle \\
+\hline
+Rho   & $\rho$   & Sensibilité aux taux d'intérêt \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Les cinq Greeks calculés dans TradeDesk}
+\label{tab:greeks}
+\end{table}
+
+La page comprend également une surface 3D interactive du prix de
+l'option en fonction du Strike et de la Maturité, un Volatility Smile,
+et les courbes de sensibilité des Greeks.
+
+\textbf{Assistant financier (page Assistant) :}
+
+L'assistant conversationnel est un chatbot à base de règles enrichi. Il
+peut :
+
+\begin{itemize}
+    \item Expliquer plus de 40 concepts financiers (RSI, VWAP, Sharpe,
+          Black-Scholes, options, PEA, etc.) avec recherche floue
+          (\texttt{difflib}) pour tolérer les fautes de frappe.
+    \item Recommander des actifs basé sur le Ratio de Sharpe calculé
+          en temps réel sur un an de données.
+    \item Consulter le portefeuille actif et lister tous les
+          portefeuilles de l'utilisateur.
+    \item Effectuer des calculs mathématiques en langage naturel
+          (ex.~«~5~\% de 2~000~»).
+    \item Afficher le taux EUR/USD en temps réel.
+\end{itemize}
+
+\textbf{Documentation et Paramètres :}
+
+La page Documentation comprend cinq sous-onglets : Mode d'Emploi,
+Comprendre les Graphiques, Stratégies \& Indicateurs (avec formules
+mathématiques), Cours de Finance accéléré (6 chapitres), et Glossaire
+(60+ termes avec recherche). La page Paramètres permet la modification
+du mot de passe, la gestion des portefeuilles et la suppression du
+compte avec double confirmation.
+
+\subsection{Fonctionnalités non réalisées}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|p{0.45\linewidth}|p{0.45\linewidth}|}
+\hline
+\textbf{Fonctionnalité prévue} & \textbf{Raison de la non-réalisation} \\
+\hline
+Authentification par e-mail avec A2F &
+    Complexité d'intégration d'un serveur SMTP en environnement
+    Streamlit Cloud gratuit \\
+\hline
+Intégration d'actualités géopolitiques pour enrichir l'assistant &
+    Absence d'API gratuite fiable et structurée pour l'analyse de
+    sentiment en temps réel \\
+\hline
+Récupération de mot de passe &
+    Nécessite un système d'e-mail, reporté à une version future \\
+\hline
+Affichage des données en direct &
+    Impossible avec yfinance (données quasi-temps réel uniquement) \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Fonctionnalités prévues non réalisées}
+\label{tab:nonrealise}
+\end{table}
+
+\subsection{Répartition du travail}
+
+La répartition suivante reflète la contribution réelle de chaque membre
+du groupe :
+
+\begin{itemize}
+    \item \textbf{CHABCHOUB Younes :} Architecture globale du projet,
+          migration de la base de données vers Supabase (PostgreSQL
+          cloud), système multi-portefeuilles, conversion EUR/USD, page
+          Dérivés et pricing Black-Scholes, assistant financier, pages
+          légales, corrections de bugs transverses.
+    \item \textbf{SAMASSEKOU Mamadou :} Page Marché (tous les graphiques
+          Plotly), calcul des indicateurs techniques (RSI, SMA, Bollinger,
+          VWAP), onglets Volatilité \& Volume, Statistiques et
+          Corrélation, script \texttt{visualisation.py}.
+    \item \textbf{KOSSONOU Élisée :} Page Portefeuille (ordres,
+          positions, historique), intégration des cryptomonnaies comme
+          catégorie d'instrument, système d'authentification, page
+          Paramètres, pipeline Medallion Bronze $\to$ Silver $\to$ Gold.
+    \item \textbf{DUFOURCQ Timothée :} Bot de trading (stratégies SMA,
+          RSI, VWAP, ML), moteur de backtesting, Grid Search C++
+          (implémentation ctypes), Random Forest avec calibration, page
+          Documentation, suite de tests unitaires et déploiement
+          Streamlit Cloud.
+    \item \textbf{Rôle de l'IA :} Nous avons dans un premier temps créé
+          le site sans utilisation de l'IA, en nous appuyant sur la
+          documentation Streamlit et nos connaissances en C++ et en
+          Python. L'IA est ensuite intervenue en tant qu'assistant de
+          programmation : après avoir pris connaissance de notre travail
+          existant et du cahier des charges, elle a proposé des
+          améliorations ciblées sur des points clés (intégration de
+          \texttt{ctypes}, gestion de l'état Streamlit, calculs
+          financiers). Son utilisation s'est toujours faite sous notre
+          supervision et a nécessité un sens critique constant pour
+          valider ses suggestions.
+\end{itemize}
+
+\section{Difficultés rencontrées}
+
+\subsection{Compatibilité période / intervalle dans yfinance}
+
+L'API yfinance impose des contraintes strictes sur les combinaisons
+période / intervalle : les données à la minute ne sont disponibles que
+sur 7 jours maximum, et les données horaires sur 60 jours au plus. Gérer
+ces contraintes sans planter l'application a nécessité l'implémentation
+d'un système d'avertissements et de messages d'erreur clairs pour
+l'utilisateur. De plus, certains actifs européens ne disposent pas de
+données de volume via yfinance, ce qui a nécessité des vérifications
+supplémentaires avant tout rendu graphique.
+
+\subsection{Migration de la base de données en production}
+
+La base de données était initialement conçue avec un schéma simple (un
+seul portefeuille par utilisateur, clé primaire \texttt{user\_id} sur la
+table \texttt{portfolio\_state}). L'ajout de la fonctionnalité
+multi-portefeuilles en cours de développement a nécessité une migration
+du schéma en base déjà en production sur Supabase, sans pouvoir effacer
+les données existantes. Nous avons dû écrire des scripts de migration
+rétrocompatibles utilisant \texttt{ALTER TABLE ... ADD COLUMN IF NOT
+EXISTS} et des blocs \texttt{DO \$\$} PostgreSQL pour modifier les
+contraintes de clé primaire à chaud.
+
+\subsection{Gestion de l'état Streamlit entre les pages}
+
+Streamlit réexécute l'intégralité du script Python à chaque interaction
+de l'utilisateur. La gestion de l'état entre les pages --- notamment le
+portefeuille actif, l'utilisateur connecté et le portefeuille sélectionné
+--- a nécessité une utilisation avancée de \texttt{st.session\_state} et
+une attention particulière à l'ordre d'initialisation des variables pour
+éviter les \texttt{KeyError} ou les rechargements intempestifs.
+
+\subsection{Compilation C++ multi-plateforme}
+
+Le moteur de calcul C++ devait fonctionner sur macOS (M1/M2), Linux
+(Streamlit Cloud) et Windows. Les trois systèmes utilisent des
+compilateurs, des conventions d'appel et des extensions de fichier
+différents (\texttt{.dylib}, \texttt{.so}, \texttt{.dll}). Nous avons
+implémenté une logique de détection automatique du compilateur disponible
+(\texttt{g++}, \texttt{clang++}) et du système d'exploitation, avec
+fallback Python pur si nécessaire. La compilation automatique à la volée
+a posé des problèmes de droits sur Streamlit Cloud, résolus en
+distribuant le binaire pré-compilé Linux dans le dépôt.
+
+\section{Bilan}
+
+\subsection{Conclusion}
+
+D'un point de vue technique, nous avons acquis des compétences concrètes
+en développement web Python (Streamlit), en gestion de bases de données
+relationnelles (PostgreSQL, psycopg2), en cryptographie appliquée
+(PBKDF2), en visualisation de données (Plotly), en mathématiques
+financières (Black-Scholes, Greeks, backtesting) et en Machine Learning
+(Random Forest, calibration). L'intégration d'un moteur C++ via
+\texttt{ctypes} pour les calculs intensifs a également été une étape
+importante pour comprendre les relations entre les différents langages.
+
+D'un point de vue méthodologique, ce projet nous a confrontés aux
+réalités du développement en équipe : gestion de conflits Git,
+coordination des tâches, revue de code, et surtout la nécessité de
+documenter et de tester son code. La programmation assistée par IA a
+constitué un levier d'accélération important, mais nous a aussi appris à
+exercer notre sens critique face aux suggestions automatisées.
+
+Le déploiement en production avec de vrais utilisateurs, une base de
+données cloud et des contraintes de disponibilité a ajouté une dimension
+opérationnelle absente des travaux pratiques habituels.
+
+\subsection{Perspectives}
+
+Plusieurs axes d'amélioration ont été identifiés en cours de
+développement et pourraient faire l'objet de versions futures :
+
+\begin{itemize}
+    \item \textbf{Authentification par e-mail avec A2F :} ajout d'une
+          vérification d'adresse e-mail et d'une authentification à deux
+          facteurs (TOTP) pour renforcer la sécurité des comptes.
+    \item \textbf{Intégration d'actualités financières :} connexion à une
+          API de news (NewsAPI, Reuters) avec analyse de sentiment (NLP)
+          pour enrichir les recommandations du bot.
+    \item \textbf{Notifications en temps réel :} alertes push lorsqu'un
+          seuil de cours ou un signal de trading est franchi.
+    \item \textbf{Comparaison multi-stratégies :} visualisation
+          simultanée de plusieurs stratégies de backtesting sur la même
+          période.
+    \item \textbf{Application mobile :} adaptation de l'interface pour
+          une meilleure expérience sur smartphone.
+\end{itemize}
+
+\newpage
+
+\section{Webographie}
+\renewcommand{\refname}{}
+\begin{thebibliography}{10}
+    \bibitem[STR]{str} Documentation officielle Streamlit.
+        \url{https://docs.streamlit.io}
+    \bibitem[YFI]{yfi} Documentation yfinance (Ran Aroussi).
+        \url{https://github.com/ranaroussi/yfinance}
+    \bibitem[PLT]{plt} Documentation Plotly Python.
+        \url{https://plotly.com/python/}
+    \bibitem[SKL]{skl} Documentation scikit-learn --- RandomForestClassifier.
+        \url{https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html}
+    \bibitem[SUP]{sup} Documentation Supabase PostgreSQL Cloud.
+        \url{https://supabase.com/docs}
+    \bibitem[PSY]{psy} Documentation psycopg2 --- PostgreSQL adapter for Python.
+        \url{https://www.psycopg.org/docs/}
+    \bibitem[NIST]{nist} NIST Special Publication 800-132 --- Recommendation
+        for Password-Based Key Derivation.
+        \url{https://csrc.nist.gov/publications/detail/sp/800-132/final}
+    \bibitem[REPO]{repo} Dépôt GitHub du projet TradeDesk.
+        \url{https://github.com/TradeDesk-Mety/Projet-Informatique-L1}
+    \bibitem[SCR]{scr} Documentation SciPy --- scipy.stats.norm.
+        \url{https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.norm.html}
+    \bibitem[INVE]{inve} Investopedia --- Référence des concepts financiers.
+        \url{https://www.investopedia.com}
+\end{thebibliography}
+
+\newpage
+
+\section{Annexes}
+\appendix
+\makeatletter
+\def\@seccntformat#1{Annexe~\csname the#1\endcsname~:\quad}
+\makeatother
+
+    \section{Cahier des charges}
+
+    \subsection*{Objectifs fonctionnels}
+    \begin{enumerate}
+        \item \textbf{Authentification :} inscription avec pseudo unique et
+              mot de passe haché, connexion, déconnexion, suppression de
+              compte, changement de mot de passe.
+        \item \textbf{Paper Trading :} achat et vente d'actions, ETF,
+              cryptomonnaies et options (Call/Put) avec commission de 1~\%,
+              suivi des positions et de la performance.
+        \item \textbf{Analyse de marché :} données de cours en temps
+              quasi-réel pour 1~000+ actifs, indicateurs techniques (RSI,
+              MACD, SMA, Bollinger, VWAP), statistiques de risque (Sharpe,
+              Bêta, Drawdown).
+        \item \textbf{Backtesting :} simulation de stratégies SMA, RSI, VWAP
+              sur données historiques avec métriques de performance.
+        \item \textbf{Bot de trading :} analyse automatisée avec 4
+              stratégies dont Machine Learning, validation explicite avant
+              tout ordre.
+        \item \textbf{Pricing d'options :} modèle Black-Scholes,
+              visualisation des Greeks et surface 3D.
+        \item \textbf{Assistant :} chatbot financier en langage naturel.
+        \item \textbf{Documentation :} mode d'emploi complet intégré à
+              l'application.
+        \item \textbf{Multi-portefeuilles :} plusieurs portefeuilles
+              indépendants par compte.
+    \end{enumerate}
+
+    \subsection*{Contraintes techniques}
+    \begin{itemize}
+        \item Interface accessible via navigateur web, sans installation
+              côté client.
+        \item Déploiement public sur Streamlit Community Cloud.
+        \item Base de données persistante hébergée dans le cloud.
+        \item Sécurité des mots de passe : hachage PBKDF2-HMAC-SHA256.
+        \item Utilisation du langage Python (obligatoire, enseigné en cours).
+        \item Intégration d'un composant C++ pour les calculs intensifs.
+    \end{itemize}
+
+    \section{Exemples d'exécution}
+    
+    \textbf{Images du code :}
+ 
+    \includegraphics[width=\linewidth]{./media/image14.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image1.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image25.png}
+ 
+    \textbf{Page 1 --- Page d'accueil et connexion}
+ 
+    \includegraphics[width=\linewidth]{./media/image18.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image12.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image17.png}
+ 
+    \textbf{Page 2 --- Analyse de marché (onglet Temps Réel)}
+ 
+    \includegraphics[width=\linewidth]{./media/image21.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image26.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image19.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image24.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image9.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image10.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image5.png}
+ 
+    \textbf{Page 3 --- Portefeuille (passer un ordre)}
+ 
+    \includegraphics[width=\linewidth]{./media/image23.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image11.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image4.png}
+ 
+    \textbf{Page 4 --- Backtesting (résultats d'une stratégie SMA)}
+ 
+    \includegraphics[width=\linewidth]{./media/image16.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image27.png}
+ 
+    \textbf{Page 5 --- Bot de trading (rapport d'analyse ML)}
+ 
+    \includegraphics[width=\linewidth]{./media/image2.png}
+ 
+    \textbf{Page 6 --- Dérivés (surface 3D Black-Scholes)}
+ 
+    \includegraphics[width=\linewidth]{./media/image20.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image15.png}
+ 
+    \includegraphics[width=\linewidth]{./media/image6.png}
+ 
+    \textbf{Page 7 --- Assistant}
+ 
+    \includegraphics[width=\linewidth]{./media/image13.png}
+ 
+    \textbf{Page 8 --- Documentation}
+ 
+    \includegraphics[width=\linewidth]{./media/image3.png}
+ 
+    \textbf{Page 9 --- Paramètres}
+ 
+    \includegraphics[width=\linewidth]{./media/image8.png}
+
+    \section{Manuel utilisateur}
+
+    \subsection*{Prérequis}
+
+    Aucune installation n'est nécessaire côté utilisateur. Il suffit d'un
+    navigateur web (Chrome, Firefox, Safari) et d'une connexion internet.
+    L'application est accessible à l'adresse :
+    \url{https://tradedesk-mety.streamlit.app/}
+
+    \subsection*{Création d'un compte}
+    \begin{enumerate}
+        \item Sur la page d'accueil, cliquer sur l'onglet \textit{Inscription}.
+        \item Saisir un nom d'utilisateur (minimum 3 caractères, unique).
+        \item Saisir un mot de passe (minimum 4 caractères) et le confirmer.
+        \item Régler le capital de départ avec le slider
+              (entre 1~000 et 1~000~000 euros fictifs).
+        \item Cliquer sur \textit{Créer mon compte}, puis se connecter via
+              l'onglet \textit{Connexion}.
+    \end{enumerate}
+
+    \subsection*{Navigation}
+
+    La barre latérale gauche donne accès à toutes les pages. Sur mobile, elle
+    est accessible via le bouton hamburger en haut à gauche.
+
+    \subsection*{Acheter un actif}
+    \begin{enumerate}
+        \item Aller dans \textit{Portefeuille} $\to$ onglet
+              \textit{Passer un ordre}.
+        \item Sélectionner \textit{Achat} et choisir le type d'instrument
+              (Action/ETF, Cryptomonnaie, ou Option).
+        \item Sélectionner l'actif dans la liste déroulante.
+        \item Saisir la quantité souhaitée.
+        \item Vérifier le résumé de l'ordre (montant brut, commission,
+              montant net) et cliquer sur \textit{ACHETER --- Confirmer}.
+    \end{enumerate}
+
+    \subsection*{Créer un nouveau portefeuille}
+    \begin{enumerate}
+        \item Dans la barre latérale de la page Portefeuille, cliquer sur
+              \textit{+ Nouveau portefeuille}.
+        \item Saisir un nom et un capital initial, puis valider.
+        \item Basculer entre les portefeuilles via le menu déroulant en
+              haut de la sidebar.
+    \end{enumerate}
+
+    \subsection*{Lancer un backtest}
+    \begin{enumerate}
+        \item Aller dans \textit{Backtesting}.
+        \item Sélectionner l'actif, la stratégie (SMA, RSI ou VWAP) et la
+              période.
+        \item Ajuster les paramètres via les sliders.
+        \item Cliquer sur \textit{Lancer le Backtest} et consulter les
+              résultats.
+    \end{enumerate}
+
+    \subsection*{Utiliser le bot de trading}
+    \begin{enumerate}
+        \item Aller dans \textit{Bot}.
+        \item Choisir un actif et une stratégie.
+        \item Cliquer sur \textit{Analyser} et lire le rapport complet.
+        \item Si un signal est détecté, cliquer sur le bouton
+              d'autorisation pour valider (ou ignorer l'ordre).
+    \end{enumerate}
+
+    \subsection*{Supprimer son compte}
+    \begin{enumerate}
+        \item Aller dans \textit{Paramètres} $\to$ onglet
+              \textit{Supprimer le Compte}.
+        \item Déplier la section de confirmation, saisir son nom
+              d'utilisateur et son mot de passe.
+        \item Cocher la case de confirmation et cliquer sur
+              \textit{SUPPRIMER DÉFINITIVEMENT MON COMPTE}.
+    \end{enumerate}
+
+\end{document}
